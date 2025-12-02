@@ -156,7 +156,7 @@ export default function DetailStationScreen() {
 
             <View style={styles.pm25Card}>
               <Text style={styles.pm25Label}>PM2.5</Text>
-              <Text style={styles.pm25Value}>{data.pm25} µg/m³</Text>
+              <Text style={styles.pm25Value}>{data.pm25.toFixed(2)} µg/m³</Text>
             </View>
 
             <View style={styles.adviceBubble}>

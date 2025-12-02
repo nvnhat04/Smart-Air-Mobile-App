@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,10 +13,15 @@ import {
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { config } from '../../config';
 import AqiBar from '../components/ui/AqiBar';
 
 const CONTROL_HEIGHT = 40;
-const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_ENDPOINT = config.NOMINATIM_ENDPOINT + '/search';
+
+// API endpoints
+const API_BASE_URL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.web;
+const OPENMETEO_API_URL = config.OPENMETEO_API_URL;
 
 // --- MOCK DATA (tham chiếu từ AirGuardApp.jsx) ---
 const baseStationMarkers = [
@@ -407,7 +413,16 @@ const LEAFLET_HTML = `
         try {
           const { lat, lng } = e.latlng;
           ensureExternalMarker(lat, lng);
-          map.setView(e.latlng, 12);
+          
+          // Send map click event to React Native
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(
+              JSON.stringify({
+                type: 'map_click',
+                payload: { lat, lng }
+              })
+            );
+          }
         } catch (err) {
           console.error('map click error', err);
         }
@@ -429,11 +444,233 @@ export default function MapScreen() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
+  const [loadingPointData, setLoadingPointData] = useState(false);
   const navigation = useNavigation();
+
+  // Helper function to get AQI color
+  const getAqiColor = (aqi) => {
+    if (!aqi) return '#9ca3af';
+    if (aqi <= 50) return '#22c55e';
+    if (aqi <= 100) return '#eab308';
+    if (aqi <= 150) return '#f97316';
+    if (aqi <= 200) return '#ef4444';
+    if (aqi <= 300) return '#991b1b';
+    return '#7f1d1d';
+  };
+
+  // Helper function to get AQI status
+  const getAqiStatus = (aqi) => {
+    if (!aqi) return 'Không rõ';
+    if (aqi <= 50) return 'Tốt';
+    if (aqi <= 100) return 'Trung bình';
+    if (aqi <= 150) return 'Kém';
+    if (aqi <= 200) return 'Xấu';
+    if (aqi <= 300) return 'Rất xấu';
+    return 'Nguy hại';
+  };
+
+  // Helper function to get health advice
+  const getHealthAdvice = (aqi) => {
+    if (!aqi) return healthAdvice.good;
+    if (aqi <= 50) return healthAdvice.good;
+    if (aqi <= 100) return healthAdvice.moderate;
+    if (aqi <= 150) return healthAdvice.unhealthy;
+    if (aqi <= 200) return healthAdvice.veryUnhealthy;
+    return healthAdvice.hazardous;
+  };
+
+  // Fetch PM2.5 and AQI data from backend with fallback URLs
+  const fetchPM25Data = async (lat, lon, date) => {
+    const dateParam = date ? date.replace(/-/g, '') : '';
+    const endpoint = `/pm25/point?lon=${lon}&lat=${lat}${dateParam ? `&date=${dateParam}` : ''}`;
+    
+    // Try multiple URLs for Android emulator compatibility
+    const urlsToTry = Platform.OS === 'android' 
+      ? [
+          `http://10.0.2.2:8000${endpoint}`,
+          `http://localhost:8000${endpoint}`,
+          `http://127.0.0.1:8000${endpoint}`,
+        ]
+      : [`${API_BASE_URL}${endpoint}`];
+    
+    for (const url of urlsToTry) {
+      try {
+        console.log('Trying PM2.5 from:', url);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.warn(`PM2.5 API error from ${url}: ${response.status}`);
+          continue; // Try next URL
+        }
+        
+        const data = await response.json();
+        console.log('✅ PM2.5 data received from:', url);
+        return data;
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ Timeout connecting to ${url}`);
+        } else {
+          console.warn(`❌ Failed to fetch from ${url}:`, error.message);
+        }
+        // Continue to next URL
+      }
+    }
+    
+    // All URLs failed
+    console.error('❌ All backend URLs failed');
+    console.error('Tried URLs:', urlsToTry);
+    console.warn('💡 Solutions:');
+    console.warn('1. Make sure server is running: cd server && python run.py');
+    console.warn('2. Check server binds to 0.0.0.0:8000 (not 127.0.0.1)');
+    console.warn('3. Try accessing http://localhost:8000/health in browser');
+    return null;
+  };
+
+  // Fetch weather data from Open-Meteo API (free, no API key required)
+  const fetchWeatherData = async (lat, lon) => {
+    try {
+      // Open-Meteo API endpoint with current weather parameters
+      const url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const current = data.current || {};
+      
+      return {
+        temp: Math.round(current.temperature_2m || 0),
+        humidity: current.relative_humidity_2m || 0,
+        windSpeed: current.wind_speed_10m || 0,
+        weatherCode: current.weather_code || 0,
+      };
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      return {
+        temp: 0,
+        humidity: 0,
+        windSpeed: 0,
+        weatherCode: 0,
+      };
+    }
+  };
+
+  // Reverse geocoding to get address from coordinates
+  const reverseGeocode = async (lat, lon) => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&accept-language=vi`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'SmartAir-Mobile/1.0',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const address = data.address || {};
+      
+      const city = address.city || address.town || address.village || '';
+      const district = address.city_district || address.district || address.suburb || '';
+      const state = address.state || '';
+      
+      return {
+        name: data.display_name?.split(',')[0] || 'Điểm được chọn',
+        address: data.display_name || '',
+        district: district || city,
+        city: state || city,
+      };
+    } catch (error) {
+      console.error('Error reverse geocoding:', error);
+      return {
+        name: 'Điểm được chọn',
+        address: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+        district: '',
+        city: '',
+      };
+    }
+  };
+
+  // Handle map click to fetch data from APIs
+  const handleMapClick = async (lat, lon) => {
+    try {
+      setLoadingPointData(true);
+      
+      // Fetch all data in parallel
+      const [pm25Data, weatherData, locationData] = await Promise.all([
+        fetchPM25Data(lat, lon, selectedDay?.isoDate),
+        fetchWeatherData(lat, lon),
+        reverseGeocode(lat, lon),
+      ]);
+
+      // Check if backend server is not available (but still show weather data if available)
+      if (!pm25Data) {
+        Alert.alert(
+          '⚠️ Không có dữ liệu PM2.5',
+          Platform.OS === 'android' 
+            ? `Không thể kết nối với server backend.\n\nĐã thử các URL:\n• http://10.0.2.2:8000\n• http://localhost:8000\n• http://127.0.0.1:8000\n\n✅ Giải pháp:\n1. Mở terminal mới\n2. cd server\n3. python run.py\n4. Đảm bảo server bind 0.0.0.0:8000`
+            : `Không thể kết nối với server backend.\n\n✅ Giải pháp:\n1. Mở terminal: cd server\n2. Chạy: python run.py\n3. Kiểm tra: http://localhost:8000/health`,
+          [{ text: 'Đã hiểu' }]
+        );
+      }
+
+      // Construct station-like object
+      const pointData = {
+        id: 'custom-point',
+        lat,
+        lng: lon,
+        name: locationData.name,
+        address: locationData.address,
+        district: locationData.district,
+        city: locationData.city,
+        aqi: pm25Data?.aqi || null,
+        pm25: pm25Data?.pm25 || null,
+        status: pm25Data?.aqi ? getAqiStatus(pm25Data.aqi) : 'Không có dữ liệu',
+        color: pm25Data?.aqi ? getAqiColor(pm25Data.aqi) : '#9ca3af',
+        temp: weatherData.temp,
+        humidity: weatherData.humidity,
+        windSpeed: weatherData.windSpeed,
+        weatherCode: weatherData.weatherCode,
+        advice: pm25Data?.aqi ? getHealthAdvice(pm25Data.aqi) : healthAdvice.good,
+        category: pm25Data?.category || null,
+      };
+
+      setSelectedStation(pointData);
+    } catch (error) {
+      console.error('Error handling map click:', error);
+    } finally {
+      setLoadingPointData(false);
+    }
+  };
 
   // Lấy thêm thông tin chi tiết (temp, humidity, advice, color, address...) giống AirGuardApp.jsx
   const selectedStationDetail = useMemo(() => {
     if (!selectedStation) return null;
+    
+    // If it's a custom point from map click, return as-is
+    if (selectedStation.id === 'custom-point') {
+      return selectedStation;
+    }
+    
+    // Otherwise, get detailed info from stationDetailsById
     const detailed = stationDetailsById[selectedStation.id];
     if (!detailed) return selectedStation;
     return {
@@ -573,6 +810,10 @@ export default function MapScreen() {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === 'station_click') {
               setSelectedStation(data.payload);
+            } else if (data.type === 'map_click') {
+              // Handle map click - fetch data from backend
+              const { lat, lng } = data.payload;
+              handleMapClick(lat, lng);
             }
           } catch (e) {
             // ignore parse errors
@@ -766,73 +1007,104 @@ export default function MapScreen() {
             <View style={{ width: 32 }} />
           </View>
 
-          <View style={styles.stationContent}>
-            <View style={styles.stationMainRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stationName}>{selectedStationDetail.name}</Text>
+          {loadingPointData ? (
+            <View style={[styles.stationContent, { alignItems: 'center', paddingVertical: 24 }]}>
+              <Text style={{ color: '#6b7280', fontSize: 14 }}>Đang tải dữ liệu...</Text>
+            </View>
+          ) : (
+            <View style={styles.stationContent}>
+              <View style={styles.stationMainRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stationName}>{selectedStationDetail.name}</Text>
 
-                {selectedStationDetail.address && (
-                  <View style={styles.stationAddressRow}>
-                    <Feather
-                      name="map-pin"
-                      size={12}
-                      color="#6b7280"
-                      style={{ marginRight: 4, marginTop: 2 }}
-                    />
-                    <Text style={styles.stationAddressText}>
-                      {selectedStationDetail.address}
-                    </Text>
-                  </View>
-                )}
+                  {selectedStationDetail.address && (
+                    <View style={styles.stationAddressRow}>
+                      <Feather
+                        name="map-pin"
+                        size={12}
+                        color="#6b7280"
+                        style={{ marginRight: 4, marginTop: 2 }}
+                      />
+                      <Text style={styles.stationAddressText}>
+                        {selectedStationDetail.address}
+                      </Text>
+                    </View>
+                  )}
 
-                <View style={styles.stationChipsRow}>
-                  <View
-                    style={[
-                      styles.stationAqiPill,
-                      { backgroundColor: selectedStationDetail.color || '#22c55e' },
-                    ]}
-                  >
-                    <Text style={styles.stationAqiPillText}>
-                      AQI {selectedStationDetail.aqi}
+                  <View style={styles.stationChipsRow}>
+                    <View
+                      style={[
+                        styles.stationAqiPill,
+                        { backgroundColor: selectedStationDetail.color || '#22c55e' },
+                      ]}
+                    >
+                      <Text style={styles.stationAqiPillText}>
+                        {selectedStationDetail.aqi ? `AQI ${selectedStationDetail.aqi}` : 'Không có dữ liệu'}
+                      </Text>
+                    </View>
+                    <Text style={styles.stationStatusText}>
+                      • {selectedStationDetail.status}
                     </Text>
+                    {!!selectedStationDetail.district && (
+                      <Text style={styles.stationDistrictText}>
+                        • {selectedStationDetail.district}
+                      </Text>
+                    )}
                   </View>
-                  <Text style={styles.stationStatusText}>
-                    • {selectedStationDetail.status}
-                  </Text>
-                  {!!selectedStationDetail.district && (
-                    <Text style={styles.stationDistrictText}>
-                      • {selectedStationDetail.district}
-                    </Text>
+
+                  {/* Show PM2.5 value if available */}
+                  {selectedStationDetail.pm25 !== null && selectedStationDetail.pm25 !== undefined && (
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                        PM2.5: <Text style={{ fontWeight: '600', color: '#111827' }}>
+                          {selectedStationDetail.pm25.toFixed(1)} μg/m³
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.stationSideMetrics}>
+                  {selectedStationDetail.temp !== null && selectedStationDetail.temp !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="thermometer" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.temp}°C</Text>
+                    </View>
+                  )}
+                  {selectedStationDetail.humidity !== null && selectedStationDetail.humidity !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="droplet" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.humidity}%</Text>
+                    </View>
+                  )}
+                  {selectedStationDetail.windSpeed !== null && selectedStationDetail.windSpeed !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="wind" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.windSpeed} m/s</Text>
+                    </View>
                   )}
                 </View>
               </View>
 
-              <View style={styles.stationSideMetrics}>
-                <View style={styles.metricRow}>
-                  <Feather name="thermometer" size={14} color="#6b7280" style={{ marginRight: 4 }} />
-                  <Text style={styles.metricText}>{selectedStationDetail.temp}°C</Text>
-                </View>
-                <View style={styles.metricRow}>
-                  <Feather name="droplet" size={14} color="#6b7280" style={{ marginRight: 4 }} />
-                  <Text style={styles.metricText}>{selectedStationDetail.humidity}%</Text>
-                </View>
-              </View>
+              {/* Button Xem chi tiết & dự báo - hiển thị cho mọi điểm */}
+              <TouchableOpacity
+                style={styles.detailButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (selectedStationDetail) {
+                    navigation.navigate('DetailStation', { station: selectedStationDetail });
+                  }
+                }}
+              >
+                <Text style={styles.detailButtonText}>
+                  {selectedStationDetail.id === 'custom-point' 
+                    ? 'Xem chi tiết' 
+                    : 'Xem chi tiết & dự báo'}
+                </Text>
+                <Feather name="chevron-right" size={16} color="#ffffff" />
+              </TouchableOpacity>
             </View>
-
-            {/* Button Xem chi tiết & dự báo */}
-            <TouchableOpacity
-              style={styles.detailButton}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (selectedStationDetail) {
-                  navigation.navigate('DetailStation', { station: selectedStationDetail });
-                }
-              }}
-            >
-              <Text style={styles.detailButtonText}>Xem chi tiết &amp; dự báo</Text>
-              <Feather name="chevron-right" size={16} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
       )}
 
