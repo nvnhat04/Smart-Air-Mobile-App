@@ -48,23 +48,27 @@ const LEAFLET_HTML = `
       }).addTo(map);
 
       let wmsLayer = null;
-      function createWmsLayer(timeStr) {
+      let currentDate = new Date().toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+      
+      function createWmsLayer(dateStr) {
         if (wmsLayer) {
           try { map.removeLayer(wmsLayer); } catch (e) {}
         }
-        const timeParam = timeStr || new Date().toISOString().split('T')[0];
-        wmsLayer = L.tileLayer.wms('https://popgis.vnu.edu.vn/geoserver/ws_geotiff/wms', {
-          layers: 'ws_geotiff:pm25_mem',
-          format: 'image/png',
-          transparent: true,
-          opacity: 0.6,
-          version: '1.1.1',
-          crs: L.CRS.EPSG4326,
-          time: timeParam,
-          styles: '',
-          tiled: true,
-          attribution: '&copy; PopGIS VNU'
-        });
+        
+        // Chuyển đổi date format nếu cần (YYYY-MM-DD -> YYYYMMDD)
+        const dateParam = dateStr ? dateStr.replace(/-/g, '') : currentDate;
+        
+        // Sử dụng TiTiler server localhost:8000 với AQI colormap
+        wmsLayer = L.tileLayer(
+          'http://localhost:8000/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi',
+          {
+            maxZoom: 18,
+            transparent: true,
+            opacity: 0.6,
+            attribution: '&copy; SmartAQ PM2.5',
+            crossOrigin: true
+          }
+        );
         wmsLayer.addTo(map);
       }
       createWmsLayer();
@@ -147,6 +151,7 @@ const LEAFLET_HTML = `
       window.__setWmsDate = function (isoDate) {
         try {
           if (isoDate) {
+            // isoDate có thể là YYYY-MM-DD hoặc YYYYMMDD
             createWmsLayer(isoDate);
           }
         } catch (e) {

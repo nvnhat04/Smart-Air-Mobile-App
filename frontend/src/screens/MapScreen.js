@@ -1,17 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Platform,
-} from 'react-native';
-import { WebView } from 'react-native-webview';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
 import AqiBar from '../components/ui/AqiBar';
 
 const CONTROL_HEIGHT = 40;
@@ -219,23 +219,30 @@ const LEAFLET_HTML = `
       }).addTo(map);
 
       let wmsLayer = null;
-      function createWmsLayer(timeStr) {
+      let currentDate = new Date().toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+      
+      function createWmsLayer(dateStr) {
         if (wmsLayer) {
           try { map.removeLayer(wmsLayer); } catch (e) {}
         }
-        const timeParam = timeStr || new Date().toISOString().split('T')[0];
-        wmsLayer = L.tileLayer.wms('https://popgis.vnu.edu.vn/geoserver/ws_geotiff/wms', {
-          layers: 'ws_geotiff:pm25_mem',
-          format: 'image/png',
-          transparent: true,
-          opacity: 0.6,
-          version: '1.1.1',
-          crs: L.CRS.EPSG4326,
-          time: timeParam,
-          styles: '',
-          tiled: true,
-          attribution: '&copy; PopGIS VNU'
-        });
+        
+        // Chuyển đổi date format nếu cần (YYYY-MM-DD -> YYYYMMDD)
+        const dateParam = dateStr ? dateStr.replace(/-/g, '') : currentDate;
+        
+        // Sử dụng TiTiler server với AQI colormap
+        // Dùng 10.0.2.2 cho Android emulator, localhost cho iOS/web
+        const serverUrl = 'http://10.0.2.2:8000';
+        
+        wmsLayer = L.tileLayer(
+          serverUrl + '/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi',
+          {
+            maxZoom: 18,
+            transparent: true,
+            opacity: 0.6,
+            attribution: '&copy; SmartAQ PM2.5',
+            crossOrigin: true
+          }
+        );
         wmsLayer.addTo(map);
       }
       createWmsLayer();
@@ -388,6 +395,7 @@ const LEAFLET_HTML = `
       window.__setWmsDate = function (isoDate) {
         try {
           if (isoDate) {
+            // isoDate có thể là YYYY-MM-DD hoặc YYYYMMDD
             createWmsLayer(isoDate);
           }
         } catch (e) {
@@ -612,6 +620,37 @@ export default function MapScreen() {
           ) : (
             <Feather name="crosshair" size={16} color="#ffffff" />
           )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Zoom controls */}
+      <View style={styles.zoomControls}>
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => {
+            if (webviewRef.current) {
+              webviewRef.current.injectJavaScript(`
+                map.zoomIn();
+                true;
+              `);
+            }
+          }}
+        >
+          <Feather name="plus" size={20} color="#374151" />
+        </TouchableOpacity>
+        <View style={styles.zoomDivider} />
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => {
+            if (webviewRef.current) {
+              webviewRef.current.injectJavaScript(`
+                map.zoomOut();
+                true;
+              `);
+            }
+          }}
+        >
+          <Feather name="minus" size={20} color="#374151" />
         </TouchableOpacity>
       </View>
 
@@ -914,6 +953,33 @@ const styles = StyleSheet.create({
     borderTopColor: 'transparent',
     borderRightColor: 'transparent',
     transform: [{ rotate: '0deg' }],
+  },
+  zoomControls: {
+    position: 'absolute',
+    right: 12,
+    bottom: 180,
+    zIndex: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  zoomButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  zoomDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
   },
   dayButton: {
     marginRight: 8,
