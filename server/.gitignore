@@ -55,4 +55,3 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
-main.py
