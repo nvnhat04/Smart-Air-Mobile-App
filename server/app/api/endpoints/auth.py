@@ -151,3 +151,26 @@ def login(payload: LoginPayload):
     except requests.HTTPError as exc:
         detail = exc.response.json() if exc.response is not None else str(exc)
         raise HTTPException(status_code=400, detail=detail)
+
+@router.get('/auth/profile/{uid}')
+def get_profile(uid: str):
+    """Retrieve a user's profile from Firestore (requires Admin SDK configured)."""
+    if not admin_available or db is None:
+        raise HTTPException(status_code=501, detail='Admin SDK / Firestore not configured on server')
+    try:
+        doc = db.collection('users').document(uid).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail='User profile not found')
+        data = doc.to_dict()
+        # Convert any non-JSON serializable fields (like datetime)
+        try:
+            if 'createdAt' in data and hasattr(data['createdAt'], 'isoformat'):
+                data['createdAt'] = data['createdAt'].isoformat()
+        except Exception:
+            pass
+        return {'success': True, 'profile': data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'[auth/profile] Error fetching profile for {uid}: {e}')
+        raise HTTPException(status_code=500, detail=str(e))
