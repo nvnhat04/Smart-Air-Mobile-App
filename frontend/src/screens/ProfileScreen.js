@@ -1,85 +1,138 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons'; // Import icons for a modern touch
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [auth, setAuth] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState({});
   const navigation = useNavigation();
 
+  // Fetch profile on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem('auth');
-        if (!raw) {
-          // Not logged in
-          navigation.navigate('Login');
-          return;
-        }
-        const authData = JSON.parse(raw);
-        setAuth(authData);
-
-        // Try to fetch profile from server
-        if (authData.uid) {
-          try {
-            // Using template literal for API call is generally fine, but ensure 'api.AUTH_BASE' is correct.
-            const res = await fetch(`${api.AUTH_BASE}/profile/${authData.uid}`);
-            if (res.ok) {
-              const json = await res.json();
-              setProfile(json.profile || null);
-            } else {
-              console.warn('[ProfileScreen] profile fetch failed', res.status);
-            }
-          } catch (e) {
-            console.warn('[ProfileScreen] failed to fetch profile:', e.message);
-          }
-        }
-      } catch (e) {
-        console.error('[ProfileScreen] Init error', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchProfile();
   }, []);
 
-  const handleLogout = () => {
-  Alert.alert(
-    "Confirm Logout", // The title of the alert
-    "Are you sure you want to log out of your account?", // The message body
-    [
-      // The buttons for the alert dialog
-      {
-        text: "Cancel", // First button (usually a dismissal action)
-        style: "cancel" // Applies iOS styling for a cancel action
-      },
-      {
-        text: "Logout", // Second button (the primary action)
-        style: "destructive", // Applies iOS styling for a destructive action (often red text)
-        onPress: async () => {
-          // --- START: Original Logout Logic moved here ---
-          try {
-            await AsyncStorage.removeItem('auth');
-            setAuth(null);
-            setProfile(null);
-            // Reset navigation stack to prevent going back to the profile screen
-            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-          } catch (e) {
-            console.error('[ProfileScreen] logout error', e);
-            Alert.alert('Logout failed', String(e));
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const raw = await AsyncStorage.getItem('auth');
+      if (!raw) {
+        navigation.navigate('Login');
+        return;
+      }
+      const authData = JSON.parse(raw);
+      setAuth(authData);
+
+      if (authData.uid) {
+        try {
+          const res = await fetch(`${api.AUTH_BASE}/profile/${authData.uid}`);
+          if (res.ok) {
+            const json = await res.json();
+            const profileData = json.profile || null;
+            setProfile(profileData);
+            setEditData(profileData || {});
+          } else {
+            console.warn('[ProfileScreen] profile fetch failed', res.status);
           }
-          // --- END: Original Logout Logic moved here ---
+        } catch (e) {
+          console.warn('[ProfileScreen] failed to fetch profile:', e.message);
         }
       }
-    ],
-    { cancelable: true } // Allows the user to dismiss the alert by tapping outside
-  );
-};
+    } catch (e) {
+      console.error('[ProfileScreen] Init error', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // --- Render logic for different states ---
+  const handleEditToggle = () => {
+    if (editMode) {
+      // Cancel edit - reset to current profile
+      setEditData(profile || {});
+    }
+    setEditMode(!editMode);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!auth || !auth.uid) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      // Build update payload (only changed fields)
+      const updatePayload = {};
+      Object.keys(editData).forEach(key => {
+        if (editData[key] !== profile?.[key]) {
+          updatePayload[key] = editData[key];
+        }
+      });
+
+      // If no changes, exit edit mode
+      if (Object.keys(updatePayload).length === 0) {
+        setEditMode(false);
+        return;
+      }
+
+      // Call update endpoint
+      const res = await fetch(`${api.AUTH_BASE}/profile/${auth.uid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setProfile(json.profile || editData);
+        setEditMode(false);
+        Alert.alert('Success', 'Profile updated successfully');
+      } else {
+        const error = await res.json();
+        Alert.alert('Update failed', error.detail || 'Unknown error');
+      }
+    } catch (e) {
+      console.error('[ProfileScreen] Save error:', e);
+      Alert.alert('Error', e.message || 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Confirm Logout',
+      'Are you sure you want to log out of your account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('auth');
+              setAuth(null);
+              setProfile(null);
+              navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+            } catch (e) {
+              console.error('[ProfileScreen] logout error', e);
+              Alert.alert('Logout failed', String(e));
+            }
+          }
+        }
+      ],
+      { cancelable: true }
+    );
+  };
 
   if (loading) {
     return (
@@ -100,7 +153,7 @@ export default function ProfileScreen() {
     );
   }
 
-  // Helper component for profile rows
+  // View mode: display profile data
   const ProfileRow = ({ icon, label, value }) => (
     <View style={styles.profileRow}>
       <View style={styles.labelContainer}>
@@ -111,27 +164,148 @@ export default function ProfileScreen() {
     </View>
   );
 
+  // Edit mode: editable form fields
+  const EditField = ({ label, icon, value, field, placeholder }) => (
+    <View style={styles.editFieldContainer}>
+      <View style={styles.editLabelContainer}>
+        <Ionicons name={icon} size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+        <Text style={styles.editLabel}>{label}</Text>
+      </View>
+      <TextInput
+        style={styles.editInput}
+        value={String(value || '')}
+        onChangeText={(text) => setEditData({ ...editData, [field]: text })}
+        placeholder={placeholder}
+        editable={!saving}
+      />
+    </View>
+  );
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>Your Profile 👤</Text>
-      
-      {/* Primary Auth Details Card */}
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Your Profile 👤</Text>
+        {profile && (
+          <TouchableOpacity
+            style={styles.editToggleButton}
+            onPress={handleEditToggle}
+            disabled={saving}
+          >
+            <Ionicons
+              name={editMode ? 'close' : 'create'}
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Account Info Card */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Account Info</Text>
         <ProfileRow icon="person-circle-outline" label="User ID" value={auth.uid} />
         <ProfileRow icon="mail-outline" label="Email" value={auth.email} />
       </View>
-      
-      {/* Server Profile Details Card */}
+
+      {/* Personal Details Card - View or Edit Mode */}
       {profile ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Personal Details</Text>
-          <ProfileRow icon="person-outline" label="Full Name" value={profile.displayName} />
-          <ProfileRow icon="male-female-outline" label="Gender" value={profile.gender} />
-          <ProfileRow icon="calendar-outline" label="Age" value={profile.age ?? null} />
-          <ProfileRow icon="call-outline" label="Phone" value={profile.phone} />
-          <ProfileRow icon="location-outline" label="City" value={profile.city} />
-          <ProfileRow icon="flag-outline" label="Country" value={profile.country} />
+
+          {editMode ? (
+            // Edit mode
+            <>
+              <EditField
+                label="Full Name"
+                icon="person-outline"
+                value={editData.displayName}
+                field="displayName"
+                placeholder="Enter your full name"
+              />
+
+              <View style={styles.editFieldContainer}>
+                <View style={styles.editLabelContainer}>
+                  <Ionicons name="male-female-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+                  <Text style={styles.editLabel}>Gender</Text>
+                </View>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={editData.gender || ''}
+                    onValueChange={(value) => setEditData({ ...editData, gender: value })}
+                    enabled={!saving}
+                  >
+                    <Picker.Item label="Select gender" value="" />
+                    <Picker.Item label="Male" value="male" />
+                    <Picker.Item label="Female" value="female" />
+                    <Picker.Item label="Other" value="other" />
+                  </Picker>
+                </View>
+              </View>
+
+              <EditField
+                label="Age"
+                icon="calendar-outline"
+                value={editData.age}
+                field="age"
+                placeholder="Enter your age"
+              />
+
+              <EditField
+                label="Phone"
+                icon="call-outline"
+                value={editData.phone}
+                field="phone"
+                placeholder="Enter your phone number"
+              />
+
+              <EditField
+                label="City"
+                icon="location-outline"
+                value={editData.city}
+                field="city"
+                placeholder="Enter your city"
+              />
+
+              <EditField
+                label="Country"
+                icon="flag-outline"
+                value={editData.country}
+                field="country"
+                placeholder="Enter your country"
+              />
+
+              {/* Save / Cancel buttons */}
+              <View style={styles.editButtonRow}>
+                <TouchableOpacity
+                  style={[styles.editActionButton, styles.saveButton]}
+                  onPress={handleSaveProfile}
+                  disabled={saving}
+                >
+                  <Ionicons name="checkmark" size={18} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.editActionButtonText}>{saving ? 'Saving...' : 'Save'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.editActionButton, styles.cancelButton]}
+                  onPress={handleEditToggle}
+                  disabled={saving}
+                >
+                  <Ionicons name="close" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.editActionButtonTextCancel}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            // View mode
+            <>
+              <ProfileRow icon="person-outline" label="Full Name" value={profile.displayName} />
+              <ProfileRow icon="male-female-outline" label="Gender" value={profile.gender} />
+              <ProfileRow icon="calendar-outline" label="Age" value={profile.age ?? null} />
+              <ProfileRow icon="call-outline" label="Phone" value={profile.phone} />
+              <ProfileRow icon="location-outline" label="City" value={profile.city} />
+              <ProfileRow icon="flag-outline" label="Country" value={profile.country} />
+            </>
+          )}
         </View>
       ) : (
         <View style={styles.noticeBox}>
@@ -143,11 +317,10 @@ export default function ProfileScreen() {
       )}
 
       {/* Logout Button */}
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={saving}>
         <Ionicons name="log-out-outline" size={22} color={colors.cardBackground} style={{ marginRight: 8 }} />
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
-      
     </ScrollView>
   );
 }
@@ -166,7 +339,7 @@ const colors = {
 
 const styles = StyleSheet.create({
   // Global Styles
-  primaryColor: { color: colors.primary }, // Use for ActivityIndicator color
+  primaryColor: { color: colors.primary },
 
   container: {
     flex: 1,
@@ -183,22 +356,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  // Headings
+  // Header
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
   title: {
     fontSize: 32,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 25,
+    flex: 1,
+  },
+  editToggleButton: {
+    padding: 10,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 8,
+    marginLeft: 10,
   },
 
-  // Card styles (elevated containers for grouped info)
+  // Card styles
   card: {
     backgroundColor: colors.cardBackground,
-    borderRadius: 15, // Soft rounded corners
+    borderRadius: 15,
     padding: 20,
     marginBottom: 20,
-    // Modern Shadow (subtle lift)
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3.84,
@@ -214,7 +398,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
 
-  // Profile Row
+  // Profile Row (View Mode)
   profileRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -241,7 +425,71 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  // Notice Box (Updated)
+  // Edit Mode Fields
+  editFieldContainer: {
+    marginBottom: 16,
+  },
+  editLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  editLabel: {
+    color: colors.textSecondary,
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    backgroundColor: colors.background,
+    color: colors.textPrimary,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+
+  // Edit Action Buttons
+  editButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  editActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  saveButton: {
+    backgroundColor: colors.primary,
+  },
+  cancelButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  editActionButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  editActionButtonTextCancel: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  // Notice Box
   noticeBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -260,14 +508,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Buttons (Updated)
+  // Buttons
   logoutButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.danger,
     padding: 15,
-    borderRadius: 10, // More rounded
+    borderRadius: 10,
     marginTop: 30,
     shadowColor: colors.danger,
     shadowOffset: { width: 0, height: 4 },
@@ -276,16 +524,16 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   logoutButtonText: {
-    color: colors.cardBackground, // White text
+    color: colors.cardBackground,
     fontWeight: '700',
     fontSize: 16,
   },
-  
+
   // Login State
-  message: { 
-    fontSize: 18, 
-    marginBottom: 20, 
-    color: colors.textPrimary 
+  message: {
+    fontSize: 18,
+    marginBottom: 20,
+    color: colors.textPrimary
   },
   loginButton: {
     backgroundColor: colors.primary,

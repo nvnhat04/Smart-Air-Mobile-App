@@ -58,6 +58,19 @@ class LoginPayload(BaseModel):
     password: str
 
 
+class UpdateProfilePayload(BaseModel):
+    """Payload for updating user profile."""
+    displayName: str | None = None
+    gender: str | None = None
+    age: int | None = None
+    phone: str | None = None
+    location: str | None = None
+    city: str | None = None
+    country: str | None = None
+    photoURL: str | None = None
+    additionalInfo: dict | None = None
+
+
 @router.post('/auth/register')
 def register(payload: RegisterPayload):
     """Register a user with extended profile (gender, age, phone, etc.).
@@ -174,3 +187,46 @@ def get_profile(uid: str):
     except Exception as e:
         print(f'[auth/profile] Error fetching profile for {uid}: {e}')
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/auth/profile/{uid}')
+def update_profile(uid: str, payload: UpdateProfilePayload):
+    """Update a user's profile in Firestore (requires Admin SDK configured)."""
+    if not admin_available or db is None:
+        raise HTTPException(status_code=501, detail='Admin SDK / Firestore not configured on server')
+    try:
+        # Fetch existing profile
+        doc = db.collection('users').document(uid).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail='User profile not found')
+        
+        # Build update dict (only include non-None fields)
+        update_data = payload.dict(exclude_none=True)
+        
+        # Add updatedAt timestamp
+        update_data['updatedAt'] = __import__('datetime').datetime.utcnow()
+        
+        # Update the document
+        db.collection('users').document(uid).update(update_data)
+        
+        # Fetch and return updated profile
+        updated_doc = db.collection('users').document(uid).get()
+        updated_data = updated_doc.to_dict()
+        
+        # Convert datetime fields for JSON serialization
+        try:
+            if 'createdAt' in updated_data and hasattr(updated_data['createdAt'], 'isoformat'):
+                updated_data['createdAt'] = updated_data['createdAt'].isoformat()
+            if 'updatedAt' in updated_data and hasattr(updated_data['updatedAt'], 'isoformat'):
+                updated_data['updatedAt'] = updated_data['updatedAt'].isoformat()
+        except Exception:
+            pass
+        
+        print(f'[auth/profile/update] User {uid} profile updated: {update_data}')
+        return {'success': True, 'profile': updated_data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'[auth/profile/update] Error updating profile for {uid}: {e}')
+        raise HTTPException(status_code=500, detail=str(e))
+

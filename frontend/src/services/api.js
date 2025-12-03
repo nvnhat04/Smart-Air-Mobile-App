@@ -259,6 +259,51 @@ api.auth = {
       }
       throw err;
     }
+  },
+
+  updateProfile: async (uid, profileUpdates) => {
+    /**
+     * Update a user's profile in Firestore.
+     * @param {string} uid - User UID from Firebase
+     * @param {object} profileUpdates - Object with fields to update (only non-null fields are sent)
+     *   - displayName: string (optional)
+     *   - gender: 'male' | 'female' | 'other' (optional)
+     *   - age: number (optional)
+     *   - phone: string (optional)
+     *   - location: string (optional)
+     *   - city: string (optional)
+     *   - country: string (optional)
+     *   - photoURL: string (optional)
+     *   - additionalInfo: object (optional)
+     * @returns {Promise<object>} Updated profile data
+     */
+    const url = `${api.AUTH_BASE}/profile/${uid}`;
+    console.warn(`[api.js] auth.updateProfile -> PUT ${url}`);
+    console.warn(`[api.js] auth.updateProfile: updates:`, profileUpdates);
+    try {
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileUpdates)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let errorMsg = text || `HTTP ${res.status}`;
+        try {
+          const json = JSON.parse(text);
+          errorMsg = json.detail || json.message || errorMsg;
+        } catch (e) {
+          // Not JSON, use text as-is
+        }
+        throw new Error(errorMsg);
+      }
+      return res.json();
+    } catch (err) {
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
+        throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
+      }
+      throw err;
+    }
   }
 };
 
