@@ -34,11 +34,23 @@ except Exception as e:
     admin_available = False
 
 
+class UserProfile(BaseModel):
+    """Extended user profile fields for registration."""
+    displayName: str | None = None
+    gender: str | None = None  # e.g., 'male', 'female', 'other'
+    age: int | None = None
+    phone: str | None = None
+    location: str | None = None
+    city: str | None = None
+    country: str | None = None
+    photoURL: str | None = None
+    additionalInfo: dict | None = None  # For custom fields
+
+
 class RegisterPayload(BaseModel):
     email: str
     password: str
-    displayName: str | None = None
-    profile: dict | None = None
+    profile: UserProfile | None = None
 
 
 class LoginPayload(BaseModel):
@@ -48,18 +60,34 @@ class LoginPayload(BaseModel):
 
 @router.post('/auth/register')
 def register(payload: RegisterPayload):
-    """Register a user. Prefer admin SDK; fallback to Firebase REST signUp when API key available."""
+    """Register a user with extended profile (gender, age, phone, etc.).
+    Prefers admin SDK; falls back to Firebase REST when API key available."""
+    
+    # Build profile dict from UserProfile model
+    profile = {
+        'email': payload.email,
+        'createdAt': None,  # Will be set by server timestamp in Firestore
+    }
+    if payload.profile:
+        profile_data = payload.profile.dict(exclude_none=True)
+        profile.update(profile_data)
+    
     if admin_available and auth_admin:
         try:
-            user = auth_admin.create_user(email=payload.email, password=payload.password, display_name=payload.displayName)
+            user = auth_admin.create_user(
+                email=payload.email,
+                password=payload.password,
+                display_name=payload.profile.displayName if payload.profile else None
+            )
             uid = user.uid
-            profile = payload.profile or {}
-            profile.update({'email': payload.email, 'displayName': payload.displayName})
+            profile['uid'] = uid
+            profile['createdAt'] = __import__('datetime').datetime.utcnow()
             try:
                 db.collection('users').document(uid).set(profile)
+                print(f'[auth/register] Admin SDK: User {uid} registered with profile: {profile}')
             except Exception as _e:
-                print('Warning: failed to write profile to Firestore:', _e)
-            return {'success': True, 'uid': uid}
+                print(f'Warning: failed to write profile to Firestore for user {uid}: {_e}')
+            return {'success': True, 'uid': uid, 'provider': 'admin'}
         except Exception as e:
             print(f'[auth/register] Admin SDK error: {e}')
             raise HTTPException(status_code=500, detail=f'Registration failed: {str(e)}')
@@ -68,10 +96,34 @@ def register(payload: RegisterPayload):
     if FIREBASE_API_KEY:
         try:
             url = f'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}'
-            body = {'email': payload.email, 'password': payload.password, 'returnSecureToken': True}
+            body = {
+                'email': payload.email,
+                'password': payload.password,
+                'returnSecureToken': True
+            }
             r = requests.post(url, json=body)
             r.raise_for_status()
-            return {'success': True, 'provider': 'rest', 'data': r.json()}
+            resp_data = r.json()
+            uid = resp_data.get('localId')
+            
+            # If Admin SDK is not available but we got uid, try to store profile
+            if uid and SERVICE_ACCOUNT and admin_available and db:
+                profile['uid'] = uid
+                profile['createdAt'] = __import__('datetime').datetime.utcnow()
+                try:
+                    db.collection('users').document(uid).set(profile)
+                    print(f'[auth/register] REST fallback: User {uid} profile stored in Firestore')
+                except Exception as _e:
+                    print(f'Warning: failed to store profile for REST user {uid}: {_e}')
+            
+            print(f'[auth/register] REST fallback: User {uid} registered with profile fields')
+            return {
+                'success': True,
+                'uid': uid,
+                'provider': 'rest',
+                'idToken': resp_data.get('idToken'),
+                'refreshToken': resp_data.get('refreshToken')
+            }
         except requests.HTTPError as exc:
             error_detail = exc.response.json() if exc.response is not None else str(exc)
             print(f'[auth/register] Firebase REST API error: {error_detail}')

@@ -178,14 +178,39 @@ const api = {
 
 // Auth helpers
 api.auth = {
-  register: async (email, password, displayName, profile) => {
+  register: async (email, password, profile = {}) => {
+    /**
+     * Register a new user with extended profile information.
+     * @param {string} email - User email
+     * @param {string} password - User password
+     * @param {object} profile - User profile containing:
+     *   - displayName: string (optional)
+     *   - gender: 'male' | 'female' | 'other' (optional)
+     *   - age: number (optional)
+     *   - phone: string (optional)
+     *   - location: string (optional)
+     *   - city: string (optional)
+     *   - country: string (optional)
+     *   - photoURL: string (optional)
+     *   - additionalInfo: object (optional, for custom fields)
+     */
     const url = `${api.AUTH_BASE}/register`;
     console.warn(`[api.js] auth.register -> POST ${url}`);
+    console.warn(`[api.js] auth.register: profile fields:`, {
+      email,
+      displayName: profile.displayName,
+      gender: profile.gender,
+      age: profile.age,
+      phone: profile.phone,
+      location: profile.location,
+      city: profile.city,
+      country: profile.country
+    });
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, displayName, profile })
+        body: JSON.stringify({ email, password, profile })
       });
       if (!res.ok) {
         const text = await res.text();
