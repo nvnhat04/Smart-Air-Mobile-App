@@ -6,6 +6,7 @@ import NewsScreen from '../screens/NewsScreen';
 import AIChatScreen from '../screens/AIChatScreen';
 import MapScreen from '../screens/MapScreen';
 import AnalyticExposureScreen from '../screens/AnalyticExposureScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -104,6 +105,23 @@ export default function RootTabs() {
           ),
           tabBarLabel: ({ focused }) => (
             <SimpleTabLabel label="AI Chat" focused={focused} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Feather
+              name="user"
+              size={20}
+              color={focused ? '#2563eb' : '#9ca3af'}
+            />
+          ),
+          tabBarLabel: ({ focused }) => (
+            <SimpleTabLabel label="Profile" focused={focused} />
           ),
         }}
       />
