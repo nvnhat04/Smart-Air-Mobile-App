@@ -2,11 +2,12 @@
 Auth endpoints for the server.
 Provides /auth/register and /auth/login using Firebase REST API as fallback and optionally Firebase Admin SDK when configured.
 """
+import os
+
+import requests
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from dotenv import load_dotenv
-import os
-import requests
 
 load_dotenv()
 
@@ -22,7 +23,8 @@ auth_admin = None
 try:
     if SERVICE_ACCOUNT:
         import firebase_admin
-        from firebase_admin import credentials, auth as auth_admin_module, firestore
+        from firebase_admin import auth as auth_admin_module
+        from firebase_admin import credentials, firestore
         cred = credentials.Certificate(SERVICE_ACCOUNT)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
@@ -58,7 +60,7 @@ class LoginPayload(BaseModel):
     password: str
 
 
-@router.post('/auth/register')
+@router.post('/register')
 def register(payload: RegisterPayload):
     """Register a user with extended profile (gender, age, phone, etc.).
     Prefers admin SDK; falls back to Firebase REST when API key available."""
@@ -137,7 +139,7 @@ def register(payload: RegisterPayload):
     raise HTTPException(status_code=500, detail=error_msg)
 
 
-@router.post('/auth/login')
+@router.post('/login')
 def login(payload: LoginPayload):
     """Login using Firebase Auth REST API (requires FIREBASE_API_KEY). Returns idToken/refreshToken on success."""
     if not FIREBASE_API_KEY:
