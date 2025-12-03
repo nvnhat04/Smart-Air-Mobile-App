@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./public/logo_smartair.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "splash": {
       "image": "./public/logo_smartair.png",
       "resizeMode": "contain",
