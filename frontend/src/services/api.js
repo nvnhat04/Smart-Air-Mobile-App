@@ -17,9 +17,16 @@ if (CONFIG_BASE === 'AUTO_DISCOVER' || CONFIG_BASE === '') {
   CONFIG_BASE = null;
 }
 
+// Auth server URL from app.json (separate from backend URL)
+let CONFIG_AUTH_BASE = Constants.expoConfig?.extra?.authServerUrl || Constants.manifest?.extra?.authServerUrl;
+if (CONFIG_AUTH_BASE === 'AUTO_DISCOVER' || CONFIG_AUTH_BASE === '') {
+  CONFIG_AUTH_BASE = null;
+}
+
 // Try to detect the packager host (which runs on the same machine as the backend)
 // Expo Go sets debuggerHost automatically when connecting to the development server
 let detectedBackendUrl = null;
+let detectedHost = null;
 try {
   // Expo Go provides debuggerHost in the manifest
   const manifest = Constants.manifest || Constants.expoConfig || {};
@@ -32,51 +39,97 @@ try {
   if (manifest.extra?.debuggerHost) console.warn(`  manifest.extra.debuggerHost: ${manifest.extra.debuggerHost}`);
   if (expoConfig.extra?.debuggerHost) console.warn(`  expoConfig.extra.debuggerHost: ${expoConfig.extra.debuggerHost}`);
   
-  // Try debuggerHost first (format: "192.168.1.2:8081" or "hostname:8081")
-  let debuggerHost = manifest.debuggerHost || manifest.packagerPort || null;
+  // Try multiple sources for debuggerHost
+  let debuggerHost = 
+    manifest.debuggerHost || 
+    manifest.packagerPort || 
+    manifest.extra?.debuggerHost ||
+    expoConfig.extra?.debuggerHost ||
+    Constants.expoGoConfig?.debuggerHost ||
+    null;
   
-  // Also try expo-constants documented properties
-  if (!debuggerHost && manifest.extra?.debuggerHost) {
-    debuggerHost = manifest.extra.debuggerHost;
-  }
-  if (!debuggerHost && expoConfig.extra?.debuggerHost) {
-    debuggerHost = expoConfig.extra.debuggerHost;
+  // Also try the connection info from expo-constants
+  if (!debuggerHost && Constants.executionEnvironment === 'standalone') {
+    // In standalone builds, try other methods
+    debuggerHost = Constants.manifest2?.extra?.expoGo?.debuggerHost;
   }
   
   if (debuggerHost) {
     // Extract the host part (remove port if present)
+    // debuggerHost format: "192.168.1.2:8081" or "hostname:8081" or just "192.168.1.2"
     let hostPart = debuggerHost.includes(':') ? debuggerHost.split(':')[0] : debuggerHost;
     
-    // Backend always runs on port 4000 on the same machine as the packager
-    detectedBackendUrl = `http://${hostPart}:4000`;
-    console.warn(`[api.js] ✓ Auto-detected backend URL: ${detectedBackendUrl}`);
+    // Skip localhost/127.0.0.1 - these won't work on physical devices
+    if (hostPart && hostPart !== 'localhost' && hostPart !== '127.0.0.1' && !hostPart.startsWith('127.')) {
+      detectedHost = hostPart;
+      detectedBackendUrl = `http://${hostPart}:4000`;
+      console.warn(`[api.js] ✓ Auto-detected backend URL: ${detectedBackendUrl}`);
+    } else {
+      console.warn(`[api.js] ⚠ debuggerHost is localhost (${hostPart}), skipping auto-detection`);
+    }
   } else {
     console.warn('[api.js] ✗ Could not auto-detect backend - no debuggerHost found');
-    console.warn('[api.js] Please set REACT_APP_API_URL or app.json backendUrl manually');
+    console.warn('[api.js] Available Constants:', {
+      manifest: !!manifest,
+      expoConfig: !!expoConfig,
+      executionEnvironment: Constants.executionEnvironment
+    });
   }
 } catch (e) {
   console.warn('[api.js] Failed to auto-detect packager host:', e.message);
 }
 
-// Resolve BASE_URL with priority: config > env > detected > localhost
-// config (app.json) is preferred because it's baked into the app at build time
-let BASE_URL = CONFIG_BASE || ENV_BASE || detectedBackendUrl || 'http://localhost:4000';
+// Resolve BASE_URL with priority: env > detected > config > localhost
+// Auto-detection (detected) is preferred over hardcoded config for network flexibility
+let BASE_URL = ENV_BASE || detectedBackendUrl || CONFIG_BASE || 'http://localhost:4000';
 
 console.warn(`[api.js] Initializing BASE_URL: ${BASE_URL}`);
-console.warn(`  priority: config=${CONFIG_BASE || 'not set'} > env=${ENV_BASE || 'not set'} > detected=${detectedBackendUrl || 'not set'} > localhost`);
+console.warn(`  priority: env=${ENV_BASE || 'not set'} > detected=${detectedBackendUrl || 'not set'} > config=${CONFIG_BASE || 'not set'} > localhost`);
+
+// Warn if using localhost on a physical device
+if (BASE_URL.includes('localhost') && Constants.executionEnvironment !== 'bare') {
+  console.warn('[api.js] ⚠ WARNING: Using localhost - this will NOT work on a physical device!');
+  console.warn('[api.js] Please ensure Expo is running with --lan flag or set REACT_APP_API_URL environment variable');
+}
+
+// Calculate AUTH_BASE once - use same host as backend but port 8000
+let AUTH_BASE_URL;
+if (CONFIG_AUTH_BASE && CONFIG_AUTH_BASE !== 'AUTO_DISCOVER') {
+  // Explicit auth server URL provided
+  AUTH_BASE_URL = `${CONFIG_AUTH_BASE}/auth`;
+} else {
+  // Auto-detect: use same host as backend but port 8000
+  try {
+    // Use detected host if available, otherwise extract from BASE_URL
+    let hostForAuth;
+    if (detectedHost) {
+      // Use the detected host directly
+      hostForAuth = detectedHost;
+    } else if (detectedBackendUrl) {
+      const b = detectedBackendUrl.replace(/^https?:\/\//, '');
+      hostForAuth = b.includes(':') ? b.split(':')[0] : b;
+    } else {
+      const b = BASE_URL.replace(/^https?:\/\//, '');
+      hostForAuth = b.includes(':') ? b.split(':')[0] : b;
+      // Don't use localhost on physical devices
+      if (hostForAuth === 'localhost' || hostForAuth === '127.0.0.1') {
+        console.warn('[api.js] ⚠ Warning: Using localhost for auth server - this may not work on physical devices');
+      }
+    }
+    AUTH_BASE_URL = `http://${hostForAuth}:8000/auth`;
+  } catch (e) {
+    AUTH_BASE_URL = 'http://localhost:8000/auth';
+    console.warn('[api.js] ⚠ Error calculating AUTH_BASE, using localhost fallback');
+  }
+}
+console.warn(`[api.js] AUTH_BASE: ${AUTH_BASE_URL}`);
+console.warn(`  config=${CONFIG_AUTH_BASE || 'not set'} > auto-detected from ${detectedHost ? 'debuggerHost' : (detectedBackendUrl ? 'BASE_URL' : 'fallback')}`);
 
 const api = {
   BASE_URL,
-  // Determine auth server URL — same host as BASE_URL but port 8000
+  // Auth now lives on the FastAPI server (port 8000), under /auth/*
   get AUTH_BASE() {
-    try {
-      // Basic parsing: remove protocol and port
-      const b = BASE_URL.replace(/^https?:\/\//, '');
-      const host = b.includes(':') ? b.split(':')[0] : b;
-      return `http://${host}:8000`;
-    } catch (e) {
-      return 'http://localhost:8000';
-    }
+    return AUTH_BASE_URL;
   },
 
   // POST /api/location
@@ -128,31 +181,59 @@ api.auth = {
   register: async (email, password, displayName, profile) => {
     const url = `${api.AUTH_BASE}/register`;
     console.warn(`[api.js] auth.register -> POST ${url}`);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, displayName, profile })
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `HTTP ${res.status}`);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, displayName, profile })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let errorMsg = text || `HTTP ${res.status}`;
+        try {
+          const json = JSON.parse(text);
+          errorMsg = json.detail || json.message || errorMsg;
+        } catch (e) {
+          // Not JSON, use text as-is
+        }
+        throw new Error(errorMsg);
+      }
+      return res.json();
+    } catch (err) {
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
+        throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
+      }
+      throw err;
     }
-    return res.json();
   },
 
   login: async (email, password) => {
     const url = `${api.AUTH_BASE}/login`;
     console.warn(`[api.js] auth.login -> POST ${url}`);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `HTTP ${res.status}`);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let errorMsg = text || `HTTP ${res.status}`;
+        try {
+          const json = JSON.parse(text);
+          errorMsg = json.detail || json.message || errorMsg;
+        } catch (e) {
+          // Not JSON, use text as-is
+        }
+        throw new Error(errorMsg);
+      }
+      return res.json();
+    } catch (err) {
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
+        throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
+      }
+      throw err;
     }
-    return res.json();
   }
 };
 

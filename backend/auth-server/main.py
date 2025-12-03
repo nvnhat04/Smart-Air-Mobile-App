@@ -54,20 +54,48 @@ def root():
 
 @app.post('/register')
 def register(payload: RegisterPayload):
-    # Prefer using Firebase Admin SDK to create user and store profile
-    if not admin_available:
-        raise HTTPException(status_code=500, detail='Firebase admin not configured - set FIREBASE_SERVICE_ACCOUNT')
+    """
+    Register a new user.
+    Preferred path: use Firebase Admin SDK (service account) to create user and store profile in Firestore.
+    Fallback: if admin SDK is not available but FIREBASE_API_KEY is set, use Firebase Auth REST `signUp` endpoint.
+    """
+    # Admin SDK path
+    if admin_available:
+        try:
+            user = auth.create_user(email=payload.email, password=payload.password, display_name=payload.displayName)
+            uid = user.uid
+            # store profile in Firestore
+            profile = payload.profile or {}
+            profile.update({'email': payload.email, 'displayName': payload.displayName})
+            try:
+                db.collection('users').document(uid).set(profile)
+            except Exception as _e:
+                # Log but do not fail registration if Firestore write fails
+                print('Warning: failed to write profile to Firestore:', _e)
+            return {'success': True, 'uid': uid}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
-    try:
-        user = auth.create_user(email=payload.email, password=payload.password, display_name=payload.displayName)
-        uid = user.uid
-        # store profile in Firestore
-        profile = payload.profile or {}
-        profile.update({'email': payload.email, 'displayName': payload.displayName})
-        db.collection('users').document(uid).set(profile)
-        return {'success': True, 'uid': uid}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Fallback path: use Firebase REST API signUp if API key is available
+    if FIREBASE_API_KEY:
+        try:
+            url = f'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}'
+            body = {
+                'email': payload.email,
+                'password': payload.password,
+                'returnSecureToken': True
+            }
+            r = requests.post(url, json=body)
+            r.raise_for_status()
+            resp = r.json()
+            # Note: we can't write to Firestore without service account; return created account info
+            return { 'success': True, 'provider': 'rest', 'data': resp }
+        except requests.HTTPError as exc:
+            detail = exc.response.json() if exc.response is not None else str(exc)
+            raise HTTPException(status_code=400, detail=detail)
+
+    # Neither admin nor REST API available
+    raise HTTPException(status_code=500, detail='Firebase admin not configured and FIREBASE_API_KEY not set; cannot register users')
 
 
 @app.post('/login')
