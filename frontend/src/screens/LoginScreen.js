@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import api from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 
 export default function LoginScreen() {
@@ -12,6 +13,14 @@ export default function LoginScreen() {
     try {
       const data = await api.auth.login(email, password);
       console.log('Login success', data);
+      // Save auth info locally
+      const authData = {
+        idToken: data.idToken,
+        refreshToken: data.refreshToken,
+        uid: data.localId || data.userId || null,
+        email: email
+      };
+      await AsyncStorage.setItem('auth', JSON.stringify(authData));
       Alert.alert('Logged in', `Welcome!`);
       navigation.navigate('MainTabs');
     } catch (e) {
