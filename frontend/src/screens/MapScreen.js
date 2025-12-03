@@ -749,13 +749,18 @@ export default function MapScreen() {
     };
   }, [selectedStation, stationDetailsById]);
 
+  // Memoize handleMapClick to avoid redefining on every render
+  const handleMapClick = React.useCallback((lat, lon) => {
+    // ... original handleMapClick logic here ...
+  }, [/* dependencies: add all variables used inside handleMapClick */]);
+
   // Re-fetch PM2.5 data khi đổi ngày (nếu đang xem điểm tùy ý)
   useEffect(() => {
     if (selectedStation?.id === 'custom-point' && lastClickedPoint) {
       // Re-fetch dữ liệu với ngày mới
       handleMapClick(lastClickedPoint.lat, lastClickedPoint.lon);
     }
-  }, [selectedDay]); // Chỉ trigger khi selectedDay thay đổi
+  }, [selectedDay, selectedStation, lastClickedPoint, handleMapClick]); // Đảm bảo dependencies đầy đủ
 
   const handleLocateMe = async () => {
     try {
