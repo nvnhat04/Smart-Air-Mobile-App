@@ -16,4 +16,7 @@ export const config = {
   
   // Nominatim (OpenStreetMap)
   NOMINATIM_ENDPOINT: 'https://nominatim.openstreetmap.org',
+  
+  // CEM (Center for Environmental Monitoring) API
+  CEM_API_BASE: 'https://tedp.vn/api',
 };
