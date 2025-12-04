@@ -749,10 +749,6 @@ export default function MapScreen() {
     };
   }, [selectedStation, stationDetailsById]);
 
-  // Memoize handleMapClick to avoid redefining on every render
-  const handleMapClick = React.useCallback((lat, lon) => {
-    // ... original handleMapClick logic here ...
-  }, [/* dependencies: add all variables used inside handleMapClick */]);
 
   // Re-fetch PM2.5 data khi đổi ngày (nếu đang xem điểm tùy ý)
   useEffect(() => {
