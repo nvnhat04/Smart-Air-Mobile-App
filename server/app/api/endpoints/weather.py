@@ -4,7 +4,7 @@ Weather API endpoints (optional - for caching OpenWeather data)
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
