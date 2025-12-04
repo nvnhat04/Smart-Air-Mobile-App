@@ -2,7 +2,6 @@
 Weather API endpoints (optional - for caching OpenWeather data)
 """
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Query
 
