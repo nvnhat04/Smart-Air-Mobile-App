@@ -3,7 +3,6 @@ Tile rendering service with AQI colormap
 """
 import logging
 from io import BytesIO
-from typing import Tuple
 
 import numpy as np
 from app.core.config import settings
