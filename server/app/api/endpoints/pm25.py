@@ -192,7 +192,6 @@ async def get_pm25_forecast(
             raise HTTPException(status_code=404, detail="No PM2.5 data available")
         
         # Find today's date or closest available
-        today = datetime.now().strftime("%Y%m%d")
         available_date_strs = {d["date_str"]: d for d in available_dates_list}
         
         # Generate forecast for next N days
