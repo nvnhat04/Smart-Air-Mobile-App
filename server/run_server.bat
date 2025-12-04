@@ -11,25 +11,25 @@ cd /d "%~dp0"
 REM Kiểm tra Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo Error: Python chua duoc cai dat hoac khong co trong PATH
+    echo Error: Python chưa được cài đặt hoặc không có trong PATH
     pause
     exit /b 1
 )
 
 REM Kiểm tra requirements
 if not exist "requirements.txt" (
-    echo Error: Khong tim thay requirements.txt
+    echo Error: Không tìm thấy requirements.txt
     pause
     exit /b 1
 )
 
 REM Cài đặt dependencies nếu cần
-echo Kiem tra va cai dat dependencies...
+echo Kiểm tra và cài đặt dependencies...
 python -m pip install -r requirements.txt -q
 
 echo.
 echo =========================================
-echo Khoi dong server tai http://localhost:8000
+echo Khởi động server tại http://localhost:8000
 echo API Docs: http://localhost:8000/docs
 echo Health Check: http://localhost:8000/health
 echo =========================================
