@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import Svg, { Path } from 'react-native-svg';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { config } from '../../config';
 
 function generateWeeklyData(baseColor) {
   const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -34,10 +35,93 @@ function getAQIBadgeColor(score) {
   return { bg: '#ede9fe', text: '#5b21b6' };
 }
 
+function getAQIColor(score) {
+  if (score <= 50) return '#22c55e'; // Xanh lá - Tốt
+  if (score <= 100) return '#eab308'; // Vàng - Trung bình
+  if (score <= 150) return '#f97316'; // Cam - Kém
+  if (score <= 200) return '#ef4444'; // Đỏ - Xấu
+  if (score <= 300) return '#a855f7'; // Tím - Rất xấu
+  return '#7c2d12'; // Nâu đỏ - Nguy hại
+}
+
 export default function DetailStationScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const station = route.params?.station;
+
+  const [realtimeData, setRealtimeData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedPoint, setSelectedPoint] = useState(null);
+
+  // Fetch forecast data from server
+  useEffect(() => {
+    const fetchForecastData = async () => {
+      if (!station?.lat || !station?.lon) {
+        console.log('⚠️ No coordinates available for forecast');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        console.log('🔄 Fetching 7-day forecast for:', station.lat, station.lon);
+        
+        // Lấy API URL từ config
+        const baseURL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.android;
+        const url = `${baseURL}/pm25/forecast?lat=${station.lat}&lon=${station.lon}&days=7`;
+        
+        console.log('🔗 Forecast URL:', url);
+        
+        const response = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Forecast data received:', data.forecast?.length || 0, 'days');
+        console.log('📊 Days with data:', data.daysWithData, '/', data.totalDays);
+
+        if (data.forecast && data.forecast.length > 0) {
+          // Format data với weather thật từ Open-Meteo
+          const weeklyData = data.forecast.map(item => ({
+            date: item.date,
+            label: item.dayOfWeek,
+            aqi: item.aqi || null,
+            pm25: item.pm25 || null,
+            temp: item.temp || null, // Nhiệt độ thật từ Open-Meteo
+            temp_max: item.temp_max || null,
+            temp_min: item.temp_min || null,
+            humidity: item.humidity || null, // Độ ẩm thật
+            wind_speed: item.wind_speed || null, // Tốc độ gió thật
+            dateKey: item.dateKey,
+            hasData: item.hasData,
+          }));
+
+          setRealtimeData({
+            weekly: weeklyData,
+            latest: weeklyData[0].hasData ? {
+              aqi: weeklyData[0].aqi,
+              pm25: weeklyData[0].pm25,
+              temp: weeklyData[0].temp,
+              humidity: weeklyData[0].humidity,
+              wind_speed: weeklyData[0].wind_speed,
+            } : null,
+          });
+        } else {
+          console.log('⚠️ No forecast data returned from server');
+        }
+      } catch (error) {
+        console.error('❌ Error fetching forecast data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchForecastData();
+  }, [station?.lat, station?.lon]);
 
   const data = useMemo(() => {
     if (!station) {
@@ -56,20 +140,33 @@ export default function DetailStationScreen() {
         },
       };
     }
+    
+    // Nếu có realtime data, dùng data mới nhất
+    const latestData = realtimeData?.latest;
+    
     return {
-      wind: station.wind ?? '5.0',
-      pm25: station.pm25 ?? String((station.aqi || 80) * 0.6),
-      humidity: station.humidity ?? 70,
-      temp: station.temp ?? 28,
+      wind: latestData?.wind_speed?.toFixed(1) || latestData?.windSpeed?.toFixed(1) || station.windSpeed?.toFixed(1) || station.wind || '5.0',
+      pm25: latestData?.pm25?.toFixed(1) || station.pm25?.toFixed(1) || String((station.aqi || 80) * 0.6),
+      humidity: latestData?.humidity || station.humidity || 70,
+      temp: latestData?.temp || station.temp || 28,
+      aqi: latestData?.aqi || station.aqi || 80,
       advice: station.advice ?? {
         text: 'Theo dõi chất lượng không khí và hạn chế vận động mạnh ngoài trời.',
         action: 'Theo dõi thêm',
       },
       ...station,
     };
-  }, [station]);
+  }, [station, realtimeData]);
 
-  const weekly = useMemo(() => generateWeeklyData(data.color || '#22c55e'), [data.color]);
+  // Sử dụng realtime data nếu có, không thì fallback về mock data
+  const weekly = useMemo(() => {
+    if (realtimeData?.weekly && realtimeData.weekly.length > 0) {
+      console.log('✅ Using realtime weekly data:', realtimeData.weekly.length, 'days');
+      return realtimeData.weekly;
+    }
+    console.log('⚠️ Using mock weekly data');
+    return generateWeeklyData(data.color || '#22c55e');
+  }, [realtimeData, data.color]);
 
   const now = useMemo(() => {
     const d = new Date();
@@ -90,28 +187,85 @@ export default function DetailStationScreen() {
     return `${weekly[0].date} - ${weekly[weekly.length - 1].date}`;
   }, [weekly]);
 
-  const chartPath = useMemo(() => {
-    if (!weekly || weekly.length === 0) return '';
-    const values = weekly.map((w) => w.aqi);
+  const chartData = useMemo(() => {
+    if (!weekly || weekly.length === 0) return { path: '', points: [] };
+    
+    // Filter ra các ngày có data
+    const validData = weekly.filter(w => w.aqi !== null && w.aqi !== undefined);
+    
+    if (validData.length === 0) return { path: '', points: [] };
+    
+    const values = validData.map((w) => w.aqi);
     const max = Math.max(...values, 10);
     const min = Math.min(...values, 0);
     const range = max - min || 1;
     const w = 260;
     const h = 70;
+    
+    // Tính step dựa trên tổng số ngày (kể cả null)
     const step = weekly.length > 1 ? w / (weekly.length - 1) : w;
 
-    return weekly
-      .map((item, idx) => {
+    // Build path và points array
+    let pathSegments = [];
+    let points = [];
+    
+    weekly.forEach((item, idx) => {
+      if (item.aqi !== null && item.aqi !== undefined) {
         const x = idx * step;
         const norm = (item.aqi - min) / range;
         const y = h - norm * (h - 8) - 4;
-        return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-      })
-      .join(' ');
+        
+        // Lưu thông tin điểm
+        points.push({
+          x,
+          y,
+          aqi: item.aqi,
+          date: item.date,
+          label: item.label,
+          temp: item.temp,
+          humidity: item.humidity,
+          pm25: item.pm25,
+          idx,
+          color: getAQIColor(item.aqi), // Thêm màu cho điểm
+        });
+        
+        // Check nếu là điểm đầu tiên hoặc điểm trước đó là null
+        const isFirstInSegment = idx === 0 || 
+          (idx > 0 && (weekly[idx - 1].aqi === null || weekly[idx - 1].aqi === undefined));
+        
+        const command = isFirstInSegment ? 'M' : 'L';
+        pathSegments.push(`${command} ${x} ${y}`);
+      }
+    });
+    
+    // Tạo labels cho trục Y (làm tròn đến bội số 25 hoặc 50)
+    const yMax = Math.ceil(max / 25) * 25;
+    const yMin = Math.floor(min / 25) * 25;
+    const yRange = yMax - yMin || 50;
+    const yStep = yRange <= 100 ? 25 : 50;
+    const yLabels = [];
+    for (let val = yMin; val <= yMax; val += yStep) {
+      yLabels.push(val);
+    }
+    
+    return {
+      path: pathSegments.join(' '),
+      points,
+      yAxisLabels: yLabels,
+      yMin,
+      yMax,
+    };
   }, [weekly]);
 
   return (
     <View style={styles.root}>
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Đang tải dữ liệu realtime...</Text>
+        </View>
+      )}
+      
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -156,7 +310,7 @@ export default function DetailStationScreen() {
 
             <View style={styles.pm25Card}>
               <Text style={styles.pm25Label}>PM2.5</Text>
-              <Text style={styles.pm25Value}>{data.pm25} µg/m³</Text>
+              <Text style={styles.pm25Value}>{data.pm25.toFixed(2)} µg/m³</Text>
             </View>
 
             <View style={styles.adviceBubble}>
@@ -247,26 +401,182 @@ export default function DetailStationScreen() {
             </View>
 
             {/* Biểu đồ đường AQI */}
-            <View style={styles.weeklyChartWrapper}>
-              <Svg width={260} height={70}>
-                <Path
-                  d={chartPath}
-                  stroke={data.color || '#22c55e'}
-                  strokeWidth={3}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            <View style={styles.weeklyChartContainer}>
+              {/* Trục Y - Labels AQI */}
+              <View style={styles.yAxisLabels}>
+                {chartData.yAxisLabels && chartData.yAxisLabels.slice().reverse().map((label, idx) => {
+                  const totalLabels = chartData.yAxisLabels.length;
+                  const spacing = 70 / (totalLabels - 1 || 1);
+                  const topPos = idx * spacing;
+                  
+                  return (
+                    <Text
+                      key={label}
+                      style={[
+                        styles.yAxisLabel,
+                        { top: topPos - 6 }
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  );
+                })}
+              </View>
+              
+              {/* Chart area */}
+              <View style={styles.weeklyChartWrapper}>
+                <Svg width={260} height={70}>
+                  <Defs>
+                    {/* Gradient cho background AQI zones */}
+                    <LinearGradient id="aqiGradient" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor="#7c2d12" stopOpacity="0.08" />
+                      <Stop offset="16.67%" stopColor="#a855f7" stopOpacity="0.08" />
+                      <Stop offset="33.33%" stopColor="#ef4444" stopOpacity="0.08" />
+                      <Stop offset="50%" stopColor="#f97316" stopOpacity="0.08" />
+                      <Stop offset="66.67%" stopColor="#eab308" stopOpacity="0.08" />
+                      <Stop offset="100%" stopColor="#22c55e" stopOpacity="0.08" />
+                    </LinearGradient>
+                  </Defs>
+                  
+                  {/* Background gradient AQI zones */}
+                  <Rect x="0" y="0" width="260" height="70" fill="url(#aqiGradient)" />
+                  
+                  {/* Gridlines ngang */}
+                  {chartData.yAxisLabels && chartData.yAxisLabels.map((label, idx) => {
+                    const totalLabels = chartData.yAxisLabels.length;
+                    const spacing = 70 / (totalLabels - 1 || 1);
+                    const y = 70 - (idx * spacing);
+                    
+                    return (
+                      <Path
+                        key={`grid-${label}`}
+                        d={`M 0 ${y} L 260 ${y}`}
+                        stroke="#e5e7eb"
+                        strokeWidth={1}
+                        strokeDasharray="4,4"
+                        opacity={0.7}
+                      />
+                    );
+                  })}
+                  
+                  {/* Đường line AQI - vẽ từng segment với màu riêng */}
+                  {chartData.points.map((point, idx) => {
+                    if (idx === 0) return null;
+                    const prevPoint = chartData.points[idx - 1];
+                    
+                    // Kiểm tra nếu có gap (ngày không có data giữa 2 điểm)
+                    if (point.idx - prevPoint.idx > 1) return null;
+                    
+                    // Dùng màu của điểm hiện tại
+                    return (
+                      <Path
+                        key={`segment-${idx}`}
+                        d={`M ${prevPoint.x} ${prevPoint.y} L ${point.x} ${point.y}`}
+                        stroke={point.color}
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    );
+                  })}
+                  
+                  {/* Vẽ các điểm có thể chạm */}
+                  {chartData.points.map((point, idx) => (
+                    <Circle
+                      key={idx}
+                      cx={point.x}
+                      cy={point.y}
+                      r={selectedPoint?.idx === point.idx ? 6 : 4}
+                      fill={point.color}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                      onPress={() => setSelectedPoint(point)}
+                    />
+                  ))}
+                </Svg>
+              
+              {/* Các nút invisible để dễ chạm hơn */}
+              {chartData.points.map((point, idx) => (
+                <TouchableOpacity
+                  key={`touch-${idx}`}
+                  style={[
+                    styles.chartPointTouch,
+                    {
+                      left: point.x - 15,
+                      top: point.y - 15,
+                    },
+                  ]}
+                  onPress={() => setSelectedPoint(point)}
+                  activeOpacity={0.7}
                 />
-              </Svg>
+              ))}
+              
+              {/* Tooltip hiển thị thông tin điểm được chọn */}
+              {selectedPoint && (
+                <View
+                  style={[
+                    styles.chartTooltip,
+                    {
+                      left: Math.min(Math.max(selectedPoint.x - 60, 0), 140),
+                      top: selectedPoint.y - 70,
+                    },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.tooltipClose}
+                    onPress={() => setSelectedPoint(null)}
+                  >
+                    <Text style={styles.tooltipCloseText}>×</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.tooltipDate}>
+                    {selectedPoint.label}, {selectedPoint.date}
+                  </Text>
+                  <View style={styles.tooltipAqiRow}>
+                    <Text style={styles.tooltipAqiLabel}>AQI:</Text>
+                    <Text style={styles.tooltipAqiValue}>{selectedPoint.aqi}</Text>
+                  </View>
+                  {selectedPoint.pm25 && (
+                    <Text style={styles.tooltipDetail}>
+                      PM2.5: {selectedPoint.pm25.toFixed(1)} µg/m³
+                    </Text>
+                  )}
+                  {selectedPoint.temp && (
+                    <Text style={styles.tooltipDetail}>
+                      🌡️ {selectedPoint.temp}°C
+                    </Text>
+                  )}
+                  {selectedPoint.humidity && (
+                    <Text style={styles.tooltipDetail}>
+                      💧 {selectedPoint.humidity}%
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
             </View>
 
             {/* Nhãn ngày trục dưới */}
             <View style={styles.weeklyDatesRow}>
-              {weekly.map((item) => (
-                <Text key={item.date} style={styles.weeklyDateLabel}>
-                  {item.date}
-                </Text>
-              ))}
+              {weekly.map((item, idx) => {
+                const step = weekly.length > 1 ? 260 / (weekly.length - 1) : 130;
+                const leftPosition = idx * step;
+                
+                return (
+                  <Text 
+                    key={item.date} 
+                    style={[
+                      styles.weeklyDateLabel,
+                      { 
+                        position: 'absolute',
+                        left: leftPosition,
+                        transform: [{ translateX: -15 }] // Center text (approx half of text width)
+                      }
+                    ]}
+                  >
+                    {item.date}
+                  </Text>
+                );
+              })}
             </View>
           </View>
 
@@ -296,12 +606,19 @@ export default function DetailStationScreen() {
               contentContainerStyle={styles.forecastScrollContent}
             >
               {weekly.map((item) => {
-                const badge = getAQIBadgeColor(item.aqi);
+                const hasData = item.aqi !== null && item.aqi !== undefined;
+                const badge = hasData ? getAQIBadgeColor(item.aqi) : { bg: '#f3f4f6', text: '#9ca3af' };
+                
                 return (
-                  <View key={item.date} style={styles.forecastCard}>
+                  <View key={item.date} style={[
+                    styles.forecastCard,
+                    !hasData && styles.forecastCardNoData
+                  ]}>
                     <Text style={styles.forecastDay}>{item.label}</Text>
                     <Text style={styles.forecastDate}>{item.date}</Text>
-                    <Text style={styles.forecastTemp}>{item.temp}°C</Text>
+                    <Text style={styles.forecastTemp}>
+                      {hasData ? `${item.temp}°C` : 'N/A'}
+                    </Text>
                     <View
                       style={[
                         styles.forecastAqiBadge,
@@ -314,7 +631,7 @@ export default function DetailStationScreen() {
                           { color: badge.text },
                         ]}
                       >
-                        {item.aqi} AQI
+                        {hasData ? `${item.aqi} AQI` : 'Chưa có'}
                       </Text>
                     </View>
                   </View>
@@ -654,16 +971,35 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 2,
   },
-  weeklyChartWrapper: {
+  weeklyChartContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginTop: 4,
     marginBottom: 8,
+  },
+  yAxisLabels: {
+    width: 35,
+    height: 70,
+    position: 'relative',
+    justifyContent: 'space-between',
+    marginRight: 8,
+  },
+  yAxisLabel: {
+    position: 'absolute',
+    fontSize: 10,
+    color: '#9ca3af',
+    fontWeight: '600',
+    right: 0,
+  },
+  weeklyChartWrapper: {
     paddingVertical: 4,
     paddingHorizontal: 4,
   },
   weeklyDatesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    position: 'relative',
+    height: 20,
+    width: 260,
+    left: "10%",
     marginTop: 2,
   },
   weeklyDateLabel: {
@@ -804,6 +1140,95 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  forecastCardNoData: {
+    opacity: 0.5,
+    borderStyle: 'dashed',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: '#2563eb',
+    fontWeight: '600',
+  },
+  chartPointTouch: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    zIndex: 10,
+  },
+  chartTooltip: {
+    position: 'absolute',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    zIndex: 20,
+  },
+  tooltipClose: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+  },
+  tooltipCloseText: {
+    fontSize: 16,
+    color: '#6b7280',
+    fontWeight: '700',
+  },
+  tooltipDate: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  tooltipAqiRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 4,
+  },
+  tooltipAqiLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginRight: 6,
+  },
+  tooltipAqiValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  tooltipDetail: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
   },
 });
 

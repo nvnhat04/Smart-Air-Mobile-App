@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./public/logo_smartair.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./public/logo_smartair.png",
       "resizeMode": "contain",
@@ -24,6 +23,10 @@
     },
     "web": {
       "favicon": "./public/logo_smartair.png"
+    },
+    "extra": {
+      "backendUrl": "AUTO_DISCOVER",
+      "authServerUrl": "AUTO_DISCOVER"
     }
   }
 }

@@ -1,115 +1,30 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Platform,
-} from 'react-native';
-import { WebView } from 'react-native-webview';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
+import { config } from '../../config';
 import AqiBar from '../components/ui/AqiBar';
+import { fetchStationsWithLatestData } from '../services/cemApi';
 
 const CONTROL_HEIGHT = 40;
-const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_ENDPOINT = config.NOMINATIM_ENDPOINT + '/search';
 
-// --- MOCK DATA (tham chiếu từ AirGuardApp.jsx) ---
-const baseStationMarkers = [
-  { 
-    id: 1, 
-    lat: 21.038511, 
-    lng: 105.784817, 
-    baseAqi: 141, 
-    name: 'Vị trí của bạn',
-    address: 'Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội',
-    district: 'Quận Cầu Giấy',
-    city: 'Hà Nội'
-  },
-  { 
-    id: 2, 
-    lat: 20.980549, 
-    lng: 105.777182, 
-    baseAqi: 91, 
-    name: 'Trạm Hà Đông',
-    address: 'Phường Quang Trung, Quận Hà Đông, Hà Nội',
-    district: 'Quận Hà Đông',
-    city: 'Hà Nội'
-  },
-  { 
-    id: 3, 
-    lat: 20.999001, 
-    lng: 105.801448, 
-    baseAqi: 81, 
-    name: 'Trạm Thanh Xuân',
-    address: 'Phường Nhân Chính, Quận Thanh Xuân, Hà Nội',
-    district: 'Quận Thanh Xuân',
-    city: 'Hà Nội'
-  },
-  { 
-    id: 4, 
-    lat: 21.121444, 
-    lng: 106.111273, 
-    baseAqi: 87, 
-    name: 'Trạm Bắc Ninh',
-    address: 'Phường Suối Hoa, Thành phố Bắc Ninh, Bắc Ninh',
-    district: 'Thành phố Bắc Ninh',
-    city: 'Bắc Ninh'
-  },
-  { 
-    id: 5, 
-    lat: 21.039937, 
-    lng: 105.921001, 
-    baseAqi: 49, 
-    name: 'Trạm Gia Lâm',
-    address: 'Phường Yên Thường, Quận Gia Lâm, Hà Nội',
-    district: 'Quận Gia Lâm',
-    city: 'Hà Nội'
-  },
-  { 
-    id: 6, 
-    lat: 20.946839, 
-    lng: 105.952934, 
-    baseAqi: 40, 
-    name: 'Trạm Ecopark',
-    address: 'Xã Xuân Quan, Huyện Văn Giang, Hưng Yên',
-    district: 'Huyện Văn Giang',
-    city: 'Hưng Yên'
-  },
-  { 
-    id: 7, 
-    lat: 21.323284, 
-    lng: 105.429681, 
-    baseAqi: 108, 
-    name: 'Trạm Việt Trì',
-    address: 'Phường Tân Dân, Thành phố Việt Trì, Phú Thọ',
-    district: 'Thành phố Việt Trì',
-    city: 'Phú Thọ'
-  },
-  { 
-    id: 8, 
-    lat: 21.275277, 
-    lng: 106.449584, 
-    baseAqi: 88, 
-    name: 'Trạm Lục Ngạn',
-    address: 'Thị trấn Chũ, Huyện Lục Ngạn, Bắc Giang',
-    district: 'Huyện Lục Ngạn',
-    city: 'Bắc Giang'
-  },
-  { 
-    id: 9, 
-    lat: 21.141819, 
-    lng: 106.384886, 
-    baseAqi: 101, 
-    name: 'Trạm Chí Linh',
-    address: 'Phường Sao Đỏ, Thành phố Chí Linh, Hải Dương',
-    district: 'Thành phố Chí Linh',
-    city: 'Hải Dương'
-  },
-];
+// API endpoints
+const API_BASE_URL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.web;
+const OPENMETEO_API_URL = config.OPENMETEO_API_URL;
+
+
 
 const healthAdvice = {
   good: { text: 'Không khí tuyệt vời! Hãy tận hưởng các hoạt động ngoài trời.', action: 'Mở cửa sổ' },
@@ -119,33 +34,36 @@ const healthAdvice = {
   hazardous: { text: 'Nguy hại! Ở trong nhà và sử dụng máy lọc không khí ngay.', action: 'Dùng máy lọc khí' },
 };
 
-const generateLocationDetails = (baseData) => {
-  const aqi = baseData.aqi;
-  let status = 'Tốt';
-  let color = '#22c55e';
-  let advice = healthAdvice.good;
+// const generateLocationDetails = (baseData) => {
+//   const aqi = baseData.aqi;
+//   let status = 'Tốt';
+//   let color = '#22c55e';
+//   let advice = healthAdvice.good;
 
-  if (aqi > 50) { status = 'Trung bình'; color = '#eab308'; advice = healthAdvice.moderate; }
-  if (aqi > 100) { status = 'Kém'; color = '#f97316'; advice = healthAdvice.unhealthy; }
-  if (aqi > 150) { status = 'Xấu'; color = '#ef4444'; advice = healthAdvice.veryUnhealthy; }
-  if (aqi > 200) { status = 'Nguy hại'; color = '#7f1d1d'; advice = healthAdvice.hazardous; }
+//   if (aqi > 50) { status = 'Trung bình'; color = '#eab308'; advice = healthAdvice.moderate; }
+//   if (aqi > 100) { status = 'Kém'; color = '#f97316'; advice = healthAdvice.unhealthy; }
+//   if (aqi > 150) { status = 'Xấu'; color = '#ef4444'; advice = healthAdvice.veryUnhealthy; }
+//   if (aqi > 200) { status = 'Nguy hại'; color = '#7f1d1d'; advice = healthAdvice.hazardous; }
 
-  return {
-    ...baseData,
-    status,
-    color,
-    advice,
-    temp: 28 + Math.floor(Math.random() * 5),
-    humidity: 60 + Math.floor(Math.random() * 20),
-  };
-};
+//   return {
+//     ...baseData,
+//     status,
+//     color,
+//     advice,
+//     temp: 28 + Math.floor(Math.random() * 5),
+//     humidity: 60 + Math.floor(Math.random() * 20),
+//   };
+// };
 
-const stationDetailsById = baseStationMarkers
-  .map((marker) => generateLocationDetails({ ...marker, aqi: marker.baseAqi }))
-  .reduce((acc, item) => {
-    acc[item.id] = item;
-    return acc;
-  }, {});
+// --- MOCK DATA - COMMENTED OUT, USING REAL DATA FROM CEM API ---
+// const stationDetailsById = baseStationMarkers
+//   .map((marker) => generateLocationDetails({ ...marker, aqi: marker.baseAqi }))
+//   .reduce((acc, item) => {
+//     acc[item.id] = item;
+//     return acc;
+//   }, {});
+
+// Sẽ được tạo từ cemStations trong component
 
 // Tạo danh sách 7 ngày từ hôm nay với label + ngày hiển thị + ISO date cho WMS
 const createDayOptions = () => {
@@ -219,38 +137,45 @@ const LEAFLET_HTML = `
       }).addTo(map);
 
       let wmsLayer = null;
-      function createWmsLayer(timeStr) {
+      let currentDate = new Date().toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+      
+      function createWmsLayer(dateStr) {
         if (wmsLayer) {
           try { map.removeLayer(wmsLayer); } catch (e) {}
         }
-        const timeParam = timeStr || new Date().toISOString().split('T')[0];
-        wmsLayer = L.tileLayer.wms('https://popgis.vnu.edu.vn/geoserver/ws_geotiff/wms', {
-          layers: 'ws_geotiff:pm25_mem',
-          format: 'image/png',
-          transparent: true,
-          opacity: 0.6,
-          version: '1.1.1',
-          crs: L.CRS.EPSG4326,
-          time: timeParam,
-          styles: '',
-          tiled: true,
-          attribution: '&copy; PopGIS VNU'
-        });
+        
+        // Chuyển đổi date format nếu cần (YYYY-MM-DD -> YYYYMMDD)
+        const dateParam = dateStr ? dateStr.replace(/-/g, '') : currentDate;
+        
+        // Sử dụng TiTiler server với AQI colormap
+        // Dùng 10.0.2.2 cho Android emulator, localhost cho iOS/web
+        const serverUrl = 'http://10.0.2.2:8000';
+        
+        wmsLayer = L.tileLayer(
+          serverUrl + '/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi',
+          {
+            maxZoom: 18,
+            transparent: true,
+            opacity: 0.6,
+            attribution: '&copy; SmartAQ PM2.5',
+            crossOrigin: true
+          }
+        );
         wmsLayer.addTo(map);
       }
       createWmsLayer();
 
 
       const stations = [
-        { id: 1, name: 'Vị trí của bạn', aqi: 141, lat: 21.038511, lng: 105.784817 },
-        { id: 2, name: 'Trạm Hà Đông', aqi: 91, lat: 20.980549, lng: 105.777182 },
-        { id: 3, name: 'Trạm Thanh Xuân', aqi: 81, lat: 20.999001, lng: 105.801448 },
-        { id: 4, name: 'Trạm Bắc Ninh', aqi: 87, lat: 21.121444, lng: 106.111273 },
-        { id: 5, name: 'Trạm Gia Lâm', aqi: 49, lat: 21.039937, lng: 105.921001 },
-        { id: 6, name: 'Trạm Ecopark', aqi: 40, lat: 20.946839, lng: 105.952934 },
-        { id: 7, name: 'Trạm Việt Trì', aqi: 108, lat: 21.323284, lng: 105.429681 },
-        { id: 8, name: 'Trạm Lục Ngạn', aqi: 88, lat: 21.275277, lng: 106.449584 },
-        { id: 9, name: 'Trạm Chí Linh', aqi: 101, lat: 21.141819, lng: 106.384886 }
+        // { id: 1, name: 'Vị trí của bạn', aqi: 141, lat: 21.038511, lng: 105.784817 },
+        // { id: 2, name: 'Trạm Hà Đông', aqi: 91, lat: 20.980549, lng: 105.777182 },
+        // { id: 3, name: 'Trạm Thanh Xuân', aqi: 81, lat: 20.999001, lng: 105.801448 },
+        // { id: 4, name: 'Trạm Bắc Ninh', aqi: 87, lat: 21.121444, lng: 106.111273 },
+        // { id: 5, name: 'Trạm Gia Lâm', aqi: 49, lat: 21.039937, lng: 105.921001 },
+        // { id: 6, name: 'Trạm Ecopark', aqi: 40, lat: 20.946839, lng: 105.952934 },
+        // { id: 7, name: 'Trạm Việt Trì', aqi: 108, lat: 21.323284, lng: 105.429681 },
+        // { id: 8, name: 'Trạm Lục Ngạn', aqi: 88, lat: 21.275277, lng: 106.449584 },
+        // { id: 9, name: 'Trạm Chí Linh', aqi: 101, lat: 21.141819, lng: 106.384886 }
       ];
 
       function getAqiColor(aqi) {
@@ -388,6 +313,7 @@ const LEAFLET_HTML = `
       window.__setWmsDate = function (isoDate) {
         try {
           if (isoDate) {
+            // isoDate có thể là YYYY-MM-DD hoặc YYYYMMDD
             createWmsLayer(isoDate);
           }
         } catch (e) {
@@ -395,11 +321,115 @@ const LEAFLET_HTML = `
         }
       };
 
+      // Function để update stations từ React Native
+      let stationMarkers = [];
+      let markersVisible = true;
+      
+      window.__updateStations = function (newStations) {
+        try {
+          // Xóa tất cả markers cũ
+          stationMarkers.forEach(marker => map.removeLayer(marker));
+          stationMarkers = [];
+
+          // Thêm markers mới
+          newStations.forEach((s) => {
+            const color = getAqiColor(s.aqi || s.baseAqi || 0);
+            const iconHtml =
+              '<div style="' +
+              'width:28px;height:28px;border-radius:999px;' +
+              'background:' + color + ';' +
+              'display:flex;align-items:center;justify-content:center;' +
+              'border:2px solid white;' +
+              'box-shadow:0 2px 8px rgba(0,0,0,0.3);' +
+              'font-size:10px;font-weight:600;color:#fff;">' +
+              (s.aqi || s.baseAqi || '?') +
+              '</div>';
+
+            const icon = L.divIcon({
+              html: iconHtml,
+              className: '',
+              iconAnchor: [14, 14],
+            });
+
+            const marker = L.marker([s.lat, s.lng], { icon });
+            
+            // Chỉ add vào map nếu markers đang visible
+            if (markersVisible) {
+              marker.addTo(map);
+            }
+            
+            marker.on('click', function () {
+              try {
+                if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                  window.ReactNativeWebView.postMessage(
+                    JSON.stringify({
+                      type: 'station_click',
+                      payload: { ...s, status: getStatusText(s.aqi || s.baseAqi || 0) }
+                    })
+                  );
+                }
+                map.setView([s.lat, s.lng], 12);
+              } catch (err) {
+                console.error('postMessage error', err);
+              }
+            });
+
+            stationMarkers.push(marker);
+          });
+
+          console.log('Updated stations:', newStations.length);
+        } catch (e) {
+          console.error('updateStations error', e);
+        }
+      };
+
+      // Function để toggle markers visibility
+      window.__toggleMarkers = function (visible) {
+        try {
+          markersVisible = visible;
+          stationMarkers.forEach(marker => {
+            if (visible) {
+              marker.addTo(map);
+            } else {
+              map.removeLayer(marker);
+            }
+          });
+          console.log('Markers visibility:', visible);
+        } catch (e) {
+          console.error('toggleMarkers error', e);
+        }
+      };
+
+      // Function để toggle heatmap visibility
+      window.__toggleHeatmap = function (visible) {
+        try {
+          if (wmsLayer) {
+            if (visible) {
+              wmsLayer.addTo(map);
+            } else {
+              map.removeLayer(wmsLayer);
+            }
+            console.log('Heatmap visibility:', visible);
+          }
+        } catch (e) {
+          console.error('toggleHeatmap error', e);
+        }
+      };
+
       map.on('click', function (e) {
         try {
           const { lat, lng } = e.latlng;
           ensureExternalMarker(lat, lng);
-          map.setView(e.latlng, 12);
+          
+          // Send map click event to React Native
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(
+              JSON.stringify({
+                type: 'map_click',
+                payload: { lat, lng }
+              })
+            );
+          }
         } catch (err) {
           console.error('map click error', err);
         }
@@ -421,18 +451,312 @@ export default function MapScreen() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
+  const [loadingPointData, setLoadingPointData] = useState(false);
+  const [lastClickedPoint, setLastClickedPoint] = useState(null); // Lưu tọa độ điểm đã click
+  const [cemStations, setCemStations] = useState([]); // Dữ liệu thật từ CEM API
+  const [loadingStations, setLoadingStations] = useState(true); // Loading state cho stations
+  const [webviewReady, setWebviewReady] = useState(false); // Track WebView ready state
+  const [showHeatmap, setShowHeatmap] = useState(true); // Toggle heatmap
+  const [showMarkers, setShowMarkers] = useState(true); // Toggle markers
   const navigation = useNavigation();
+
+  // Load dữ liệu trạm thật từ CEM API khi component mount
+  useEffect(() => {
+    const loadStations = async () => {
+      try {
+        setLoadingStations(true);
+        console.log('🔄 Loading stations from CEM API...');
+        const stations = await fetchStationsWithLatestData();
+        console.log(`✅ Loaded ${stations.length} stations from CEM`);
+        
+        // Debug: Log chi tiết stations
+        if (stations.length > 0) {
+          console.log('📊 First station sample:', {
+            id: stations[0].id,
+            name: stations[0].name,
+            lat: stations[0].lat,
+            lng: stations[0].lng,
+            aqi: stations[0].aqi,
+            baseAqi: stations[0].baseAqi,
+          });
+        }
+        
+        setCemStations(stations);
+      } catch (error) {
+        console.error('❌ Error loading CEM stations:', error);
+        Alert.alert(
+          'Lỗi tải dữ liệu',
+          'Không thể tải dữ liệu trạm từ CEM. Vui lòng thử lại sau.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setLoadingStations(false);
+      }
+    };
+
+    loadStations();
+  }, []); // Chỉ chạy một lần khi mount
+
+  // Helper function to get AQI color
+  const getAqiColor = (aqi) => {
+    if (!aqi) return '#9ca3af';
+    if (aqi <= 50) return '#22c55e';
+    if (aqi <= 100) return '#eab308';
+    if (aqi <= 150) return '#f97316';
+    if (aqi <= 200) return '#ef4444';
+    if (aqi <= 300) return '#991b1b';
+    return '#7f1d1d';
+  };
+
+  // Helper function to get AQI status
+  const getAqiStatus = (aqi) => {
+    if (!aqi) return 'Không rõ';
+    if (aqi <= 50) return 'Tốt';
+    if (aqi <= 100) return 'Trung bình';
+    if (aqi <= 150) return 'Kém';
+    if (aqi <= 200) return 'Xấu';
+    if (aqi <= 300) return 'Rất xấu';
+    return 'Nguy hại';
+  };
+
+  // Helper function to get health advice
+  const getHealthAdvice = (aqi) => {
+    if (!aqi) return healthAdvice.good;
+    if (aqi <= 50) return healthAdvice.good;
+    if (aqi <= 100) return healthAdvice.moderate;
+    if (aqi <= 150) return healthAdvice.unhealthy;
+    if (aqi <= 200) return healthAdvice.veryUnhealthy;
+    return healthAdvice.hazardous;
+  };
+
+  // Fetch PM2.5 and AQI data from backend with fallback URLs
+  const fetchPM25Data = async (lat, lon, date) => {
+    const dateParam = date ? date.replace(/-/g, '') : '';
+    const endpoint = `/pm25/point?lon=${lon}&lat=${lat}${dateParam ? `&date=${dateParam}` : ''}`;
+    
+    // Try multiple URLs for Android emulator compatibility
+    const urlsToTry = Platform.OS === 'android' 
+      ? [
+          `http://10.0.2.2:8000${endpoint}`,
+          `http://localhost:8000${endpoint}`,
+          `http://127.0.0.1:8000${endpoint}`,
+        ]
+      : [`${API_BASE_URL}${endpoint}`];
+    
+    for (const url of urlsToTry) {
+      try {
+        console.log('Trying PM2.5 from:', url);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.warn(`PM2.5 API error from ${url}: ${response.status}`);
+          continue; // Try next URL
+        }
+        
+        const data = await response.json();
+        console.log('✅ PM2.5 data received from:', url);
+        return data;
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ Timeout connecting to ${url}`);
+        } else {
+          console.warn(`❌ Failed to fetch from ${url}:`, error.message);
+        }
+        // Continue to next URL
+      }
+    }
+    
+    // All URLs failed
+    console.error('❌ All backend URLs failed');
+    console.error('Tried URLs:', urlsToTry);
+    console.warn('💡 Solutions:');
+    console.warn('1. Make sure server is running: cd server && python run.py');
+    console.warn('2. Check server binds to 0.0.0.0:8000 (not 127.0.0.1)');
+    console.warn('3. Try accessing http://localhost:8000/health in browser');
+    return null;
+  };
+
+  // Fetch weather data from Open-Meteo API (free, no API key required)
+  const fetchWeatherData = async (lat, lon) => {
+    try {
+      // Open-Meteo API endpoint with current weather parameters
+      const url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const current = data.current || {};
+      
+      return {
+        temp: Math.round(current.temperature_2m || 0),
+        humidity: current.relative_humidity_2m || 0,
+        windSpeed: current.wind_speed_10m || 0,
+        weatherCode: current.weather_code || 0,
+      };
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      return {
+        temp: 0,
+        humidity: 0,
+        windSpeed: 0,
+        weatherCode: 0,
+      };
+    }
+  };
+
+  // Reverse geocoding to get address from coordinates
+  const reverseGeocode = async (lat, lon) => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&accept-language=vi`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'SmartAir-Mobile/1.0',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const address = data.address || {};
+      
+      const city = address.city || address.town || address.village || '';
+      const district = address.city_district || address.district || address.suburb || '';
+      const state = address.state || '';
+      
+      return {
+        name: data.display_name?.split(',')[0] || 'Điểm được chọn',
+        address: data.display_name || '',
+        district: district || city,
+        city: state || city,
+      };
+    } catch (error) {
+      console.error('Error reverse geocoding:', error);
+      return {
+        name: 'Điểm được chọn',
+        address: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+        district: '',
+        city: '',
+      };
+    }
+  };
+
+  // Handle map click to fetch data from APIs
+  const handleMapClick = async (lat, lon) => {
+    try {
+      setLoadingPointData(true);
+      
+      // Lưu tọa độ để có thể re-fetch khi đổi ngày
+      setLastClickedPoint({ lat, lon });
+      
+      // Fetch all data in parallel
+      const [pm25Data, weatherData, locationData] = await Promise.all([
+        fetchPM25Data(lat, lon, selectedDay?.isoDate),
+        fetchWeatherData(lat, lon),
+        reverseGeocode(lat, lon),
+      ]);
+
+      // Check if backend server is not available (but still show weather data if available)
+      if (!pm25Data) {
+        Alert.alert(
+          '⚠️ Không có dữ liệu PM2.5',
+          Platform.OS === 'android' 
+            ? `Không thể kết nối với server backend.\n\nĐã thử các URL:\n• http://10.0.2.2:8000\n• http://localhost:8000\n• http://127.0.0.1:8000\n\n✅ Giải pháp:\n1. Mở terminal mới\n2. cd server\n3. python run.py\n4. Đảm bảo server bind 0.0.0.0:8000`
+            : `Không thể kết nối với server backend.\n\n✅ Giải pháp:\n1. Mở terminal: cd server\n2. Chạy: python run.py\n3. Kiểm tra: http://localhost:8000/health`,
+          [{ text: 'Đã hiểu' }]
+        );
+      }
+
+      // Construct station-like object
+      const pointData = {
+        id: 'custom-point',
+        lat,
+        lon, // Đổi từ lng sang lon để consistent với DetailStationScreen
+        lng: lon, // Giữ lng để backward compatible
+        name: locationData.name,
+        address: locationData.address,
+        district: locationData.district,
+        city: locationData.city,
+        aqi: pm25Data?.aqi || null,
+        pm25: pm25Data?.pm25 || null,
+        status: pm25Data?.aqi ? getAqiStatus(pm25Data.aqi) : 'Không có dữ liệu',
+        color: pm25Data?.aqi ? getAqiColor(pm25Data.aqi) : '#9ca3af',
+        temp: weatherData.temp,
+        humidity: weatherData.humidity,
+        windSpeed: weatherData.windSpeed,
+        weatherCode: weatherData.weatherCode,
+        advice: pm25Data?.aqi ? getHealthAdvice(pm25Data.aqi) : healthAdvice.good,
+        category: pm25Data?.category || null,
+      };
+
+      setSelectedStation(pointData);
+    } catch (error) {
+      console.error('Error handling map click:', error);
+    } finally {
+      setLoadingPointData(false);
+    }
+  };
+
+  // Tạo stationDetailsById từ cemStations
+  const stationDetailsById = useMemo(() => {
+    const map = {};
+    cemStations.forEach(station => {
+      const aqi = station.aqi || station.baseAqi || 0;
+      map[station.id] = {
+        ...station,
+        aqi,
+        status: getAqiStatus(aqi),
+        color: getAqiColor(aqi),
+        advice: getHealthAdvice(aqi),
+      };
+    });
+    return map;
+  }, [cemStations]);
 
   // Lấy thêm thông tin chi tiết (temp, humidity, advice, color, address...) giống AirGuardApp.jsx
   const selectedStationDetail = useMemo(() => {
     if (!selectedStation) return null;
+    
+    // If it's a custom point from map click, return as-is
+    if (selectedStation.id === 'custom-point') {
+      return selectedStation;
+    }
+    
+    // Otherwise, get detailed info from stationDetailsById
     const detailed = stationDetailsById[selectedStation.id];
     if (!detailed) return selectedStation;
     return {
       ...detailed,
       ...selectedStation,
     };
-  }, [selectedStation]);
+  }, [selectedStation, stationDetailsById]);
+
+
+  // Re-fetch PM2.5 data khi đổi ngày (nếu đang xem điểm tùy ý)
+  useEffect(() => {
+    if (selectedStation?.id === 'custom-point' && lastClickedPoint) {
+      // Re-fetch dữ liệu với ngày mới
+      handleMapClick(lastClickedPoint.lat, lastClickedPoint.lon);
+    }
+  }, [selectedDay, selectedStation, lastClickedPoint, handleMapClick]); // Đảm bảo dependencies đầy đủ
 
   const handleLocateMe = async () => {
     try {
@@ -552,6 +876,61 @@ export default function MapScreen() {
     setSearchError(null);
   };
 
+  // Inject stations vào WebView sau khi cemStations được load và WebView ready
+  useEffect(() => {
+    if (webviewReady && webviewRef.current && cemStations.length > 0) {
+      console.log(`🗺️ Injecting ${cemStations.length} stations into map...`);
+      
+      // Delay nhỏ để đảm bảo map đã init xong
+      setTimeout(() => {
+        const js = `
+          if (window.__updateStations) {
+            window.__updateStations(${JSON.stringify(cemStations)});
+            console.log('✅ Stations injected successfully');
+          } else {
+            console.error('❌ __updateStations function not found');
+          }
+          true;
+        `;
+        webviewRef.current.injectJavaScript(js);
+      }, 500); // 500ms delay
+    }
+  }, [cemStations, webviewReady]); // Trigger khi cemStations hoặc webviewReady thay đổi
+
+  // Toggle markers visibility
+  useEffect(() => {
+    if (webviewReady && webviewRef.current) {
+      const js = `
+        window.__toggleMarkers && window.__toggleMarkers(${showMarkers});
+        true;
+      `;
+      webviewRef.current.injectJavaScript(js);
+    }
+  }, [showMarkers, webviewReady]);
+
+  // Ẩn markers khi chọn ngày khác ngày hôm nay
+  useEffect(() => {
+    if (webviewReady && webviewRef.current) {
+      const shouldShowMarkers = selectedDayIndex === 0 && showMarkers;
+      const js = `
+        window.__toggleMarkers && window.__toggleMarkers(${shouldShowMarkers});
+        true;
+      `;
+      webviewRef.current.injectJavaScript(js);
+    }
+  }, [selectedDayIndex, showMarkers, webviewReady]);
+
+  // Toggle heatmap visibility
+  useEffect(() => {
+    if (webviewReady && webviewRef.current) {
+      const js = `
+        window.__toggleHeatmap && window.__toggleHeatmap(${showHeatmap});
+        true;
+      `;
+      webviewRef.current.injectJavaScript(js);
+    }
+  }, [showHeatmap, webviewReady]);
+
   return (
     <View style={styles.container}>
       {/* WebView hiển thị Leaflet map (WebView thuần, giống bản đầu) */}
@@ -560,11 +939,19 @@ export default function MapScreen() {
         originWhitelist={['*']}
         source={{ html: LEAFLET_HTML }}
         style={styles.webview}
+        onLoad={() => {
+          console.log('✅ WebView loaded, map ready');
+          setWebviewReady(true);
+        }}
         onMessage={(event) => {
           try {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === 'station_click') {
               setSelectedStation(data.payload);
+            } else if (data.type === 'map_click') {
+              // Handle map click - fetch data from backend
+              const { lat, lng } = data.payload;
+              handleMapClick(lat, lng);
             }
           } catch (e) {
             // ignore parse errors
@@ -612,6 +999,75 @@ export default function MapScreen() {
           ) : (
             <Feather name="crosshair" size={16} color="#ffffff" />
           )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Layer Controls - Toggle Heatmap & Markers */}
+      <View style={styles.layerControls}>
+        <TouchableOpacity
+          style={[styles.layerButton, !showHeatmap && styles.layerButtonInactive]}
+          onPress={() => setShowHeatmap(!showHeatmap)}
+        >
+          <Feather name="map" size={16} color={showHeatmap ? "#2563eb" : "#9ca3af"} />
+          <Text style={[styles.layerButtonText, !showHeatmap && styles.layerButtonTextInactive]}>
+            Heatmap
+          </Text>
+        </TouchableOpacity>
+       <View style={styles.separator} />
+        <TouchableOpacity
+          style={[
+            styles.layerButton,
+            (!showMarkers || selectedDayIndex !== 0) && styles.layerButtonInactive
+          ]}
+          onPress={() => {
+            if (selectedDayIndex === 0) {
+              setShowMarkers(!showMarkers);
+            }
+          }}
+          disabled={selectedDayIndex !== 0}
+        >
+          <Feather 
+            name="map-pin" 
+            size={16} 
+            color={(showMarkers && selectedDayIndex === 0) ? "#2563eb" : "#9ca3af"} 
+          />
+          <Text style={[
+            styles.layerButtonText,
+            (!showMarkers || selectedDayIndex !== 0) && styles.layerButtonTextInactive
+          ]}>
+            Trạm
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Zoom controls */}
+      <View style={styles.zoomControls}>
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => {
+            if (webviewRef.current) {
+              webviewRef.current.injectJavaScript(`
+                map.zoomIn();
+                true;
+              `);
+            }
+          }}
+        >
+          <Feather name="plus" size={20} color="#374151" />
+        </TouchableOpacity>
+        <View style={styles.zoomDivider} />
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => {
+            if (webviewRef.current) {
+              webviewRef.current.injectJavaScript(`
+                map.zoomOut();
+                true;
+              `);
+            }
+          }}
+        >
+          <Feather name="minus" size={20} color="#374151" />
         </TouchableOpacity>
       </View>
 
@@ -727,73 +1183,105 @@ export default function MapScreen() {
             <View style={{ width: 32 }} />
           </View>
 
-          <View style={styles.stationContent}>
-            <View style={styles.stationMainRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stationName}>{selectedStationDetail.name}</Text>
+          {loadingPointData ? (
+            <View style={[styles.stationContent, { alignItems: 'center', paddingVertical: 24 }]}>
+              <Text style={{ color: '#6b7280', fontSize: 14 }}>Đang tải dữ liệu...</Text>
+            </View>
+          ) : (
+            <View style={styles.stationContent}>
+              <View style={styles.stationMainRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stationName}>{selectedStationDetail.name}</Text>
 
-                {selectedStationDetail.address && (
-                  <View style={styles.stationAddressRow}>
-                    <Feather
-                      name="map-pin"
-                      size={12}
-                      color="#6b7280"
-                      style={{ marginRight: 4, marginTop: 2 }}
-                    />
-                    <Text style={styles.stationAddressText}>
-                      {selectedStationDetail.address}
-                    </Text>
-                  </View>
-                )}
+                  {selectedStationDetail.address && (
+                    <View style={styles.stationAddressRow}>
+                      <Feather
+                        name="map-pin"
+                        size={12}
+                        color="#6b7280"
+                        style={{ marginRight: 4, marginTop: 2 }}
+                      />
+                      <Text style={styles.stationAddressText}>
+                        {selectedStationDetail.address}
+                      </Text>
+                    </View>
+                  )}
 
-                <View style={styles.stationChipsRow}>
-                  <View
-                    style={[
-                      styles.stationAqiPill,
-                      { backgroundColor: selectedStationDetail.color || '#22c55e' },
-                    ]}
-                  >
-                    <Text style={styles.stationAqiPillText}>
-                      AQI {selectedStationDetail.aqi}
+                  <View style={styles.stationChipsRow}>
+                    <View
+                      style={[
+                        styles.stationAqiPill,
+                        { backgroundColor: selectedStationDetail.color || '#22c55e' },
+                      ]}
+                    >
+                      <Text style={styles.stationAqiPillText}>
+                        {selectedStationDetail.aqi ? `AQI ${selectedStationDetail.aqi}` : 'Không có dữ liệu'}
+                      </Text>
+                    </View>
+                    <Text style={styles.stationStatusText}>
+                      • {selectedStationDetail.status}
                     </Text>
+                    {!!selectedStationDetail.district && (
+                      <Text style={styles.stationDistrictText}>
+                        • {selectedStationDetail.district}
+                      </Text>
+                    )}
                   </View>
-                  <Text style={styles.stationStatusText}>
-                    • {selectedStationDetail.status}
-                  </Text>
-                  {!!selectedStationDetail.district && (
-                    <Text style={styles.stationDistrictText}>
-                      • {selectedStationDetail.district}
-                    </Text>
+
+                  {/* Show PM2.5 value if available */}
+                  {selectedStationDetail.pm25 !== null && selectedStationDetail.pm25 !== undefined && (
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                        PM2.5: <Text style={{ fontWeight: '600', color: '#111827' }}>
+                          {selectedStationDetail.pm25.toFixed(1)} μg/m³
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.stationSideMetrics}>
+                  {selectedStationDetail.temp !== null && selectedStationDetail.temp !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="thermometer" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.temp}°C</Text>
+                    </View>
+                  )}
+                  {selectedStationDetail.humidity !== null && selectedStationDetail.humidity !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="droplet" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.humidity}%</Text>
+                    </View>
+                  )}
+                  {selectedStationDetail.windSpeed !== null && selectedStationDetail.windSpeed !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="wind" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.windSpeed} m/s</Text>
+                    </View>
                   )}
                 </View>
               </View>
 
-              <View style={styles.stationSideMetrics}>
-                <View style={styles.metricRow}>
-                  <Feather name="thermometer" size={14} color="#6b7280" style={{ marginRight: 4 }} />
-                  <Text style={styles.metricText}>{selectedStationDetail.temp}°C</Text>
-                </View>
-                <View style={styles.metricRow}>
-                  <Feather name="droplet" size={14} color="#6b7280" style={{ marginRight: 4 }} />
-                  <Text style={styles.metricText}>{selectedStationDetail.humidity}%</Text>
-                </View>
-              </View>
+              {/* Button Xem chi tiết & dự báo - hiển thị cho mọi điểm trong ngày hôm nay */}
+              {selectedDay === dayOptions[0] && (
+              <TouchableOpacity
+                style={styles.detailButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (selectedStationDetail) {
+                    navigation.navigate('DetailStation', { station: selectedStationDetail });
+                  }
+                }}
+              >
+                <Text style={styles.detailButtonText}>
+                        Xem chi tiết & dự báo
+                </Text>
+                <Feather name="chevron-right" size={16} color="#ffffff" />
+              </TouchableOpacity>
+              )}
             </View>
-
-            {/* Button Xem chi tiết & dự báo */}
-            <TouchableOpacity
-              style={styles.detailButton}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (selectedStationDetail) {
-                  navigation.navigate('DetailStation', { station: selectedStationDetail });
-                }
-              }}
-            >
-              <Text style={styles.detailButtonText}>Xem chi tiết &amp; dự báo</Text>
-              <Feather name="chevron-right" size={16} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
+            
+          )}
         </View>
       )}
 
@@ -812,6 +1300,38 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loadingBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 13,
+    color: '#6b7280',
   },
   topBar: {
     position: 'absolute',
@@ -914,6 +1434,76 @@ const styles = StyleSheet.create({
     borderTopColor: 'transparent',
     borderRightColor: 'transparent',
     transform: [{ rotate: '0deg' }],
+  },
+  separator: {
+  width: 2,
+  height: '100%',   // hoặc 100% nếu muốn đường dài
+  backgroundColor: '#e1dbdbff', // màu xám nhạt
+},
+  layerControls: {
+    position: 'absolute',
+    width: '45%',
+    left: '27.5%',  
+    bottom: 60,
+    zIndex: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  layerButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ffffff',
+    minWidth: 100,
+  },
+  layerButtonInactive: {
+    opacity: 0.5,
+  },
+  layerButtonText: {
+    fontSize: 13,
+    color: '#2563eb',
+    fontWeight: '600',
+  },
+  layerButtonTextInactive: {
+    color: '#9ca3af',
+  },
+  zoomControls: {
+    position: 'absolute',
+    right: 12,
+    top: 100,
+    zIndex: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  zoomButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  zoomDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
   },
   dayButton: {
     marginRight: 8,
