@@ -15,6 +15,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { config } from '../../config';
 import AqiBar from '../components/ui/AqiBar';
+import { useLocationTracking } from '../hooks/useLocationTracking';
 import { fetchStationsWithLatestData } from '../services/cemApi';
 
 const CONTROL_HEIGHT = 40;
@@ -440,6 +441,7 @@ const LEAFLET_HTML = `
 `;
 
 export default function MapScreen() {
+  const { saveCurrentLocation } = useLocationTracking(true); // Enable auto-tracking
   const [dayOptions] = useState(createDayOptions);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [dayMenuOpen, setDayMenuOpen] = useState(false);
@@ -496,6 +498,28 @@ export default function MapScreen() {
 
     loadStations();
   }, []); // Chỉ chạy một lần khi mount
+
+  // Lưu vị trí khi user xem detail của một station
+  useEffect(() => {
+    if (selectedStation && selectedStation.lat && selectedStation.lng) {
+      const saveStationLocation = async () => {
+        try {
+          console.log('[MapScreen] Saving location when viewing station detail:', selectedStation.name);
+          await saveCurrentLocation({
+            aqi: selectedStation.aqi || selectedStation.baseAqi,
+            address: selectedStation.name || 'Trạm quan trắc',
+          });
+          console.log('[MapScreen] Station location saved successfully');
+        } catch (error) {
+          console.warn('[MapScreen] Failed to save station location:', error);
+        }
+      };
+      
+      // Delay một chút để user thực sự xem detail (không phải chỉ click qua)
+      const timer = setTimeout(saveStationLocation, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedStation]);
 
   // Helper function to get AQI color
   const getAqiColor = (aqi) => {

@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useLocationTracking } from '../hooks/useLocationTracking';
+import api from '../services/api';
 
 const generateAnalyticsData = () => {
   const locations = [
@@ -84,9 +86,325 @@ const getAQIColor = (aqi) => {
   return '#7f1d1d';
 };
 
+// Hàm tạo dữ liệu từ lịch sử thực + dự báo từ API PM2.5
+const processLocationHistory = async (historyData) => {
+  const today = new Date();
+  const analyticsData = [];
+  
+  // Group history by date
+  const historyByDate = {};
+  // Track location frequency and coordinates for forecast
+  const locationFrequency = {};
+  const locationCoords = {}; // Store lat/lon for each location
+  
+
+  historyData.forEach(record => {
+    const recordDate = new Date(record.timestamp);
+    const dateKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}-${String(recordDate.getDate()).padStart(2, '0')}`;
+    
+    if (!historyByDate[dateKey]) {
+      historyByDate[dateKey] = [];
+    }
+    historyByDate[dateKey].push(record);
+    
+    // Count location frequency and store coordinates
+    const address = record.address || 'Unknown';
+    locationFrequency[address] = (locationFrequency[address] || 0) + 1;
+    if (!locationCoords[address] && record.latitude && record.longitude) {
+      locationCoords[address] = { lat: record.latitude, lon: record.longitude };
+    }
+  });
+  
+  // Find most visited locations
+  const sortedLocations = Object.entries(locationFrequency)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([addr]) => addr);
+  
+  console.log('[processLocationHistory] Most visited locations:', sortedLocations);
+
+  // Tạo data cho 6 ngày qua
+  for (let i = -6; i < 0; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    
+    const dayRecords = historyByDate[dateKey] || [];
+    let aqi, location, lat, lon;
+    
+    if (dayRecords.length > 0) {
+      // Tính AQI trung bình trong ngày
+      const totalAqi = dayRecords.reduce((sum, r) => sum + (r.aqi || 0), 0);
+      aqi = Math.round(totalAqi / dayRecords.length);
+      // Lấy địa điểm có AQI cao nhất
+      const maxRecord = dayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, dayRecords[0]);
+      location = maxRecord.address || 'Vị trí không xác định';
+      lat = maxRecord.latitude;
+      lon = maxRecord.longitude;
+    } else {
+      // Không có data thực, dùng mock
+      aqi = 30 + Math.floor(Math.random() * 90);
+      location = 'Chưa có dữ liệu';
+      lat = null;
+      lon = null;
+    }
+
+    analyticsData.push({
+      key: i.toString(),
+      date: dateStr,
+      aqi,
+      location,
+      latitude: lat,
+      longitude: lon,
+      type: 'past',
+    });
+  }
+
+  // Hôm nay
+  const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayRecords = historyByDate[todayKey] || [];
+  
+  let todayAqi, todayLocation, todayLat, todayLon;
+  if (todayRecords.length > 0) {
+    const maxRecord = todayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, todayRecords[0]);
+    todayAqi = maxRecord.aqi || 75;
+    todayLocation = maxRecord.address || 'Vị trí hiện tại';
+    todayLat = maxRecord.latitude;
+    todayLon = maxRecord.longitude;
+  } else {
+    todayAqi = 75;
+    todayLocation = 'Vị trí hiện tại';
+    todayLat = null;
+    todayLon = null;
+  }
+
+  analyticsData.push({
+    key: '0',
+    date: todayStr,
+    aqi: todayAqi,
+    location: todayLocation,
+    latitude: todayLat,
+    longitude: todayLon,
+    type: 'present',
+  });
+
+  // Dự báo 6 ngày tới - Gọi API PM2.5 forecast cho các vị trí đã lưu
+  // Ngày +1 dự báo tại vị trí của ngày -6, +2 tại -5, +3 tại -4, +4 tại -3, +5 tại -2, +6 tại -1
+  const forecastPromises = [];
+  const forecastLocationMap = {}; // Map ngày → vị trí
+  
+  for (let i = 1; i <= 6; i++) {
+    // Lấy data từ ngày đối xứng trong quá khứ (ngày -(7-i))
+    const mirrorDate = new Date(today);
+    mirrorDate.setDate(today.getDate() - (7 - i));
+    const mirrorDateKey = `${mirrorDate.getFullYear()}-${String(mirrorDate.getMonth() + 1).padStart(2, '0')}-${String(mirrorDate.getDate()).padStart(2, '0')}`;
+    
+    const mirrorDayRecords = historyByDate[mirrorDateKey] || [];
+    
+    if (mirrorDayRecords.length > 0) {
+      // Lấy vị trí chính trong ngày đối xứng
+      const primaryRecord = mirrorDayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, mirrorDayRecords[0]);
+      const primaryLocation = primaryRecord.address;
+      const coords = locationCoords[primaryLocation];
+      
+      if (coords) {
+        forecastLocationMap[i] = { location: primaryLocation, coords };
+        // Gọi API PM2.5 forecast
+        forecastPromises.push(
+          api.getPM25Forecast(coords.lat, coords.lon, 7)
+            .then(data => ({ day: i, data, location: primaryLocation }))
+            .catch(err => {
+              console.error(`[Forecast Day +${i}] API error:`, err);
+              return { day: i, data: null, location: primaryLocation };
+            })
+        );
+      }
+    }
+  }
+  
+  // Đợi tất cả API calls
+  const forecastResults = await Promise.all(forecastPromises);
+  const forecastDataMap = {};
+  forecastResults.forEach(result => {
+    if (result.data && result.data.forecast) {
+      forecastDataMap[result.day] = result.data;
+    }
+  });
+  
+  // Tạo dự báo 7 ngày với data từ API
+  for (let i = 1; i <= 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+    const mirrorDate = new Date(today);
+    mirrorDate.setDate(today.getDate() - i);
+    const mirrorDateKey = `${mirrorDate.getFullYear()}-${String(mirrorDate.getMonth() + 1).padStart(2, '0')}-${String(mirrorDate.getDate()).padStart(2, '0')}`;
+    const mirrorDateStr = `${String(mirrorDate.getDate()).padStart(2, '0')}/${String(mirrorDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    let aqi, location;
+    const forecastData = forecastDataMap[i];
+    const locationInfo = forecastLocationMap[i];
+    
+    if (forecastData && forecastData.forecast && forecastData.forecast.length > 0) {
+      // Sử dụng data từ API PM2.5 forecast
+      const dayForecast = forecastData.forecast[i - 1]; // Index 0 = ngày đầu tiên
+      aqi = dayForecast?.aqi || 75;
+      location = locationInfo?.location || 'Dự báo';
+      
+      const addressParts = location.split(',');
+      const shortLocation = addressParts[addressParts.length - 2]?.trim() || addressParts[0] || 'Dự báo';
+      
+      console.log(`[Forecast Day +${i}] API PM2.5: ${dayForecast?.pm25}, AQI: ${aqi}, Location: ${shortLocation}`);
+      
+      const coords = locationInfo?.coords;
+      analyticsData.push({
+        key: `+${i}`,
+        date: dateStr,
+        aqi: Math.max(0, Math.min(500, aqi)),
+        location: `Dự báo: ${shortLocation}`,
+        latitude: coords?.lat || null,
+        longitude: coords?.lon || null,
+        type: 'future',
+        note: `Dự báo PM2.5 tại ${shortLocation}`,
+      });
+    } else {
+      // Fallback: tính toán local nếu API fail
+      const mirrorDayRecords = historyByDate[mirrorDateKey] || [];
+      
+      if (mirrorDayRecords.length > 0) {
+        const primaryRecord = mirrorDayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, mirrorDayRecords[0]);
+        const primaryLocation = primaryRecord.address;
+        const locationRecords = historyData.filter(r => r.address === primaryLocation);
+        
+        if (locationRecords.length > 0) {
+          const avgPm25 = locationRecords.reduce((sum, r) => sum + (r.pm25 || 0), 0) / locationRecords.length;
+          const forecastPm25 = avgPm25 + (Math.random() * 8 - 4);
+          
+          if (forecastPm25 <= 12) aqi = Math.round((forecastPm25 / 12) * 50);
+          else if (forecastPm25 <= 35.4) aqi = Math.round(((forecastPm25 - 12) / (35.4 - 12)) * 50 + 50);
+          else if (forecastPm25 <= 55.4) aqi = Math.round(((forecastPm25 - 35.4) / (55.4 - 35.4)) * 50 + 100);
+          else if (forecastPm25 <= 150.4) aqi = Math.round(((forecastPm25 - 55.4) / (150.4 - 55.4)) * 50 + 150);
+          else aqi = Math.round(((forecastPm25 - 150.4) / (250.4 - 150.4)) * 50 + 200);
+        } else {
+          aqi = Math.round(primaryRecord.aqi + (Math.random() * 15 - 7.5));
+        }
+        
+        const addressParts = (primaryLocation || '').split(',');
+        location = addressParts[addressParts.length - 2]?.trim() || addressParts[0] || 'Dự báo';
+      } else {
+        // No history data
+        const fallbackLocation = sortedLocations[0];
+        if (fallbackLocation) {
+          const coords = locationCoords[fallbackLocation];
+          if (coords) {
+            aqi = 75 + Math.floor(Math.random() * 50);
+          } else {
+            aqi = 75 + Math.floor(Math.random() * 50);
+          }
+          const parts = fallbackLocation.split(',');
+          location = parts[parts.length - 2]?.trim() || parts[0] || 'Dự báo';
+        } else {
+          aqi = 75 + Math.floor(Math.random() * 50);
+          location = 'Dự báo';
+        }
+      }
+
+      // Lấy coordinates từ primary record hoặc fallback location
+      let fallbackLat = null, fallbackLon = null;
+      if (mirrorDayRecords.length > 0) {
+        const primaryRecord = mirrorDayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, mirrorDayRecords[0]);
+        fallbackLat = primaryRecord.latitude;
+        fallbackLon = primaryRecord.longitude;
+      } else if (sortedLocations[0] && locationCoords[sortedLocations[0]]) {
+        const coords = locationCoords[sortedLocations[0]];
+        fallbackLat = coords.lat;
+        fallbackLon = coords.lon;
+      }
+
+      analyticsData.push({
+        key: `+${i}`,
+        date: dateStr,
+        aqi: Math.max(0, Math.min(500, aqi)),
+        location: `Dự báo: ${location}`,
+        latitude: fallbackLat,
+        longitude: fallbackLon,
+        type: 'future',
+        note: mirrorDayRecords.length > 0 ? `Dựa trên dữ liệu ngày ${mirrorDateStr}` : `Dự báo cho ${location}`,
+      });
+    }
+  }
+
+  return analyticsData;
+};
+
 export default function AnalyticExposureScreen() {
-  const analyticsData = useMemo(() => generateAnalyticsData(), []);
+  const { getLocationHistory } = useLocationTracking(true);
+  const [historyData, setHistoryData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState(7);
+  const [selectedRadius, setSelectedRadius] = useState(100);
+  const [showRadiusMenu, setShowRadiusMenu] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState([]);
+  
+  // Load location history khi component mount (7 ngày)
+  useEffect(() => {
+    const loadHistory = async () => {
+      setLoading(true);
+      try {
+        const history = await getLocationHistory(7); // Chỉ lấy 7 ngày
+        setHistoryData(history);
+        console.log('[AnalyticExposureScreen] Loaded 7-day history:', history.length, 'records');
+        
+        // Process history với API PM2.5 forecast
+        const processed = await processLocationHistory(history);
+        setAnalyticsData(processed);
+      } catch (error) {
+        console.error('[AnalyticExposureScreen] Failed to load history:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadHistory();
+  }, [getLocationHistory]);
+
+  // Mock data "trốn bụi đi chơi"
+  const allDestinations = useMemo(
+    () => [
+      { id: 1, name: 'Ecopark, Hưng Yên', aqi: 40, weatherType: 'sun', temp: 24, distance: 18, driveTime: '35 phút', recommendation: 'Công viên sinh thái, hồ nước rộng, đạp xe dạo chơi' },
+      { id: 2, name: 'Công viên Yên Sở', aqi: 45, weatherType: 'sun', temp: 23, distance: 12, driveTime: '25 phút', recommendation: 'Hồ rộng, chạy bộ, picnic gia đình, không gian xanh' },
+      { id: 3, name: 'Làng cổ Đường Lâm', aqi: 48, weatherType: 'cloud', temp: 22, distance: 45, driveTime: '1 giờ 10 phút', recommendation: 'Làng cổ 1200 năm, nhà sàn truyền thống, ẩm thực đặc sản' },
+      { id: 4, name: 'Khu du lịch Sơn Tây', aqi: 44, weatherType: 'sun', temp: 21, distance: 42, driveTime: '1 giờ', recommendation: 'Thành cổ Sơn Tây, núi non hùng vĩ, không khí trong lành' },
+      { id: 5, name: 'Vườn Vua Resort', aqi: 38, weatherType: 'sun', temp: 25, distance: 35, driveTime: '50 phút', recommendation: 'Resort sinh thái, vườn cây ăn trái, trải nghiệm làm vườn' },
+      { id: 6, name: 'Ba Vì, Hà Nội', aqi: 42, weatherType: 'sun', temp: 21, distance: 65, driveTime: '1 giờ 45 phút', recommendation: 'Vườn quốc gia, suối nước nóng, cắm trại rừng thông' },
+      { id: 7, name: 'Chùa Hương, Mỹ Đức', aqi: 48, weatherType: 'cloud', temp: 22, distance: 60, driveTime: '1 giờ 40 phút', recommendation: 'Di tích lịch sử, chèo thuyền suối Yến, núi non hữu tình' },
+      { id: 8, name: 'Đại Lải, Vĩnh Phúc', aqi: 38, weatherType: 'sun', temp: 23, distance: 55, driveTime: '1 giờ 20 phút', recommendation: 'Hồ Đại Lải xanh mát, resort nghỉ dưỡng, thể thao nước' },
+      { id: 9, name: 'Tam Đảo, Vĩnh Phúc', aqi: 35, weatherType: 'cloud', temp: 18, distance: 85, driveTime: '2 giờ 15 phút', recommendation: 'Săn mây, check-in Thác Bạc, khí hậu mát mẻ quanh năm' },
+      { id: 10, name: 'Thung Nham, Ninh Bình', aqi: 36, weatherType: 'sun', temp: 24, distance: 95, driveTime: '2 giờ 30 phút', recommendation: 'Hang động, vườn chim, kayaking, cảnh quan tuyệt đẹp' },
+    ],
+    [],
+  );
+
+  const filteredDestinations = useMemo(
+    () =>
+      allDestinations
+        .filter((d) => d.distance <= selectedRadius)
+        .sort((a, b) => a.aqi - b.aqi),
+    [allDestinations, selectedRadius],
+  );
+
+  // Show loading state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.loadingText}>Đang tải dữ liệu phơi nhiễm...</Text>
+      </View>
+    );
+  }
 
   const selectedData = analyticsData[selectedIdx];
 
@@ -112,31 +430,7 @@ export default function AnalyticExposureScreen() {
     name: 'Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội',
     aqi: 141,
   };
-  const allDestinations = useMemo(
-    () => [
-      { id: 1, name: 'Ecopark, Hưng Yên', aqi: 40, weatherType: 'sun', temp: 24, distance: 18, driveTime: '35 phút', recommendation: 'Công viên sinh thái, hồ nước rộng, đạp xe dạo chơi' },
-      { id: 2, name: 'Công viên Yên Sở', aqi: 45, weatherType: 'sun', temp: 23, distance: 12, driveTime: '25 phút', recommendation: 'Hồ rộng, chạy bộ, picnic gia đình, không gian xanh' },
-      { id: 3, name: 'Làng cổ Đường Lâm', aqi: 48, weatherType: 'cloud', temp: 22, distance: 45, driveTime: '1 giờ 10 phút', recommendation: 'Làng cổ 1200 năm, nhà sàn truyền thống, ẩm thực đặc sản' },
-      { id: 4, name: 'Khu du lịch Sơn Tây', aqi: 44, weatherType: 'sun', temp: 21, distance: 42, driveTime: '1 giờ', recommendation: 'Thành cổ Sơn Tây, núi non hùng vĩ, không khí trong lành' },
-      { id: 5, name: 'Vườn Vua Resort', aqi: 38, weatherType: 'sun', temp: 25, distance: 35, driveTime: '50 phút', recommendation: 'Resort sinh thái, vườn cây ăn trái, trải nghiệm làm vườn' },
-      { id: 6, name: 'Ba Vì, Hà Nội', aqi: 42, weatherType: 'sun', temp: 21, distance: 65, driveTime: '1 giờ 45 phút', recommendation: 'Vườn quốc gia, suối nước nóng, cắm trại rừng thông' },
-      { id: 7, name: 'Chùa Hương, Mỹ Đức', aqi: 48, weatherType: 'cloud', temp: 22, distance: 60, driveTime: '1 giờ 40 phút', recommendation: 'Di tích lịch sử, chèo thuyền suối Yến, núi non hữu tình' },
-      { id: 8, name: 'Đại Lải, Vĩnh Phúc', aqi: 38, weatherType: 'sun', temp: 23, distance: 55, driveTime: '1 giờ 20 phút', recommendation: 'Hồ Đại Lải xanh mát, resort nghỉ dưỡng, thể thao nước' },
-      { id: 9, name: 'Tam Đảo, Vĩnh Phúc', aqi: 35, weatherType: 'cloud', temp: 18, distance: 85, driveTime: '2 giờ 15 phút', recommendation: 'Săn mây, check-in Thác Bạc, khí hậu mát mẻ quanh năm' },
-      { id: 10, name: 'Thung Nham, Ninh Bình', aqi: 36, weatherType: 'sun', temp: 24, distance: 95, driveTime: '2 giờ 30 phút', recommendation: 'Hang động, vườn chim, kayaking, cảnh quan tuyệt đẹp' },
-    ],
-    [],
-  );
-  const [selectedRadius, setSelectedRadius] = useState(100);
   const radiusOptions = [50, 100, 150, 200];
-  const [showRadiusMenu, setShowRadiusMenu] = useState(false);
-  const filteredDestinations = useMemo(
-    () =>
-      allDestinations
-        .filter((d) => d.distance <= selectedRadius)
-        .sort((a, b) => a.aqi - b.aqi),
-    [allDestinations, selectedRadius],
-  );
 
   return (
     <ScrollView
@@ -147,7 +441,7 @@ export default function AnalyticExposureScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.headerTitle}>Lịch sử &amp; dự báo</Text>
-          <Text style={styles.headerSubtitle}>Phân tích chất lượng không khí 15 ngày</Text>
+          <Text style={styles.headerSubtitle}>Phân tích chất lượng không khí 13 ngày</Text>
         </View>
       </View>
 
@@ -155,7 +449,7 @@ export default function AnalyticExposureScreen() {
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <View style={styles.chartAccent} />
-          <Text style={styles.chartTitle}>Diễn biến 15 ngày</Text>
+          <Text style={styles.chartTitle}>Diễn biến 13 ngày</Text>
         </View>
 
         <View style={styles.barRow}>
@@ -426,6 +720,18 @@ export default function AnalyticExposureScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
   container: {
     flex: 1,
     backgroundColor: '#eff6ff',
