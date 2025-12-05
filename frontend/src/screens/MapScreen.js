@@ -594,7 +594,7 @@ export default function MapScreen() {
     try {
       // Open-Meteo API endpoint with current weather parameters
       const url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`;
-      
+      console.log('Fetching weather from:', url);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -756,7 +756,7 @@ export default function MapScreen() {
       // Re-fetch dữ liệu với ngày mới
       handleMapClick(lastClickedPoint.lat, lastClickedPoint.lon);
     }
-  }, [selectedDay, selectedStation, lastClickedPoint, handleMapClick]); // Đảm bảo dependencies đầy đủ
+  }, [selectedDay]); // Đảm bảo dependencies đầy đủ
 
   const handleLocateMe = async () => {
     try {
