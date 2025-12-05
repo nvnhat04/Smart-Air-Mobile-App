@@ -5,6 +5,7 @@ import logging
 
 from app.api import api_router
 from app.core.config import settings
+from app.db.mongodb import close_mongo_connection, connect_to_mongo
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -32,6 +33,25 @@ app.add_middleware(
     allow_methods=settings.CORS_ALLOW_METHODS,
     allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Connect to MongoDB on startup"""
+    logger.info("🚀 Starting up application...")
+    try:
+        await connect_to_mongo()
+        logger.info("✅ MongoDB connection established")
+    except Exception as e:
+        logger.error(f"❌ Failed to connect to MongoDB: {e}")
+        # Continue without MongoDB - some endpoints may not work
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close MongoDB connection on shutdown"""
+    logger.info("🔄 Shutting down application...")
+    await close_mongo_connection()
+    logger.info("✅ Application shutdown complete")
 
 # Include API router
 app.include_router(api_router)

@@ -49,6 +49,15 @@ class Settings(BaseSettings):
         {"pm_min": 250.0, "pm_max": 500.0, "aqi_min": 301, "aqi_max": 500, "color": (126, 0, 35, 255),    "level": "Hazardous"}
     ]
     
+    # MongoDB Settings (load from .env)
+    MONGODB_URL: str = "mongodb://localhost:27017"  # Default fallback
+    MONGODB_DB_NAME: str = "smartair"
+    
+    # JWT Settings (load from .env - SECRET_KEY is required)
+    SECRET_KEY: str  # Must be set in .env file
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30 days
+    
     class Config:
         case_sensitive = True
         env_file = ".env"

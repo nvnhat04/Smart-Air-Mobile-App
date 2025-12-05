@@ -1,155 +1,430 @@
 """
-Auth endpoints for the server.
-Provides /auth/register and /auth/login using Firebase REST API as fallback and optionally Firebase Admin SDK when configured.
+Auth endpoints using MongoDB and JWT tokens
+Provides /register, /login, /profile endpoints with JWT authentication
 """
-import os
+from datetime import datetime, timedelta
+from typing import Optional
 
-import requests
-from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
-load_dotenv()
-
-FIREBASE_API_KEY = os.getenv('FIREBASE_API_KEY')
-SERVICE_ACCOUNT = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+from app.core.config import settings
+from app.core.security import (create_access_token, get_current_user,
+                               get_password_hash, verify_password)
+from app.db.mongodb import get_database
+from app.models.user import (Token, UserCreate, UserInDB, UserLogin,
+                             UserProfile, UserResponse)
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
 
 router = APIRouter()
 
-# Try to initialize firebase admin if service account is provided
-admin_available = False
-db = None
-auth_admin = None
-try:
-    if SERVICE_ACCOUNT:
-        import firebase_admin
-        from firebase_admin import auth as auth_admin_module
-        from firebase_admin import credentials, firestore
-        cred = credentials.Certificate(SERVICE_ACCOUNT)
-        firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        auth_admin = auth_admin_module
-        admin_available = True
-except Exception as e:
-    # Admin SDK is optional; log will be visible on server
-    print('Firebase admin init error:', e)
-    admin_available = False
+
+class UpdateProfilePayload(BaseModel):
+    """Payload for updating user profile"""
+    profile: UserProfile
 
 
-class UserProfile(BaseModel):
-    """Extended user profile fields for registration."""
-    displayName: str | None = None
-    gender: str | None = None  # e.g., 'male', 'female', 'other'
-    age: int | None = None
-    phone: str | None = None
-    location: str | None = None
-    city: str | None = None
-    country: str | None = None
-    photoURL: str | None = None
-    additionalInfo: dict | None = None  # For custom fields
-
-
-class RegisterPayload(BaseModel):
-    email: str
-    password: str
-    profile: UserProfile | None = None
-
-
-class LoginPayload(BaseModel):
-    email: str
-    password: str
-
-
-@router.post('/register')
-def register(payload: RegisterPayload):
-    """Register a user with extended profile (gender, age, phone, etc.).
-    Prefers admin SDK; falls back to Firebase REST when API key available."""
+@router.post('/register', response_model=Token, status_code=status.HTTP_201_CREATED)
+async def register(payload: UserCreate):
+    """
+    Register a new user with email and password
     
-    # Build profile dict from UserProfile model
-    profile = {
-        'email': payload.email,
-        'createdAt': None,  # Will be set by server timestamp in Firestore
+    - **email**: Valid email address (unique)
+    - **password**: Minimum 6 characters
+    - **profile**: Optional user profile information
+    - **role**: Optional user role (default: "user")
+    
+    Returns JWT access token and user information
+    """
+    db = get_database()
+    
+    # Check if user already exists
+    existing_user = await db.users.find_one({"email": payload.email})
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Check if username already exists
+    existing_username = await db.users.find_one({"username": payload.username})
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken"
+        )
+    
+    # Validate username (alphanumeric and underscore only, 3-20 characters)
+    import re
+    if not re.match(r'^[a-zA-Z0-9_]{3,20}$', payload.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username must be 3-20 characters and contain only letters, numbers, and underscores"
+        )
+    
+    # Validate password length
+    if len(payload.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters"
+        )
+    
+    # Create user document
+    user_dict = {
+        "email": payload.email,
+        "username": payload.username,
+        "hashed_password": get_password_hash(payload.password),
+        "profile": payload.profile.dict() if payload.profile else {},
+        "role": payload.role or "user",
+        "is_active": True,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
     }
-    if payload.profile:
-        profile_data = payload.profile.dict(exclude_none=True)
-        profile.update(profile_data)
     
-    if admin_available and auth_admin:
-        try:
-            user = auth_admin.create_user(
-                email=payload.email,
-                password=payload.password,
-                display_name=payload.profile.displayName if payload.profile else None
-            )
-            uid = user.uid
-            profile['uid'] = uid
-            profile['createdAt'] = __import__('datetime').datetime.utcnow()
-            try:
-                db.collection('users').document(uid).set(profile)
-                print(f'[auth/register] Admin SDK: User {uid} registered with profile: {profile}')
-            except Exception as _e:
-                print(f'Warning: failed to write profile to Firestore for user {uid}: {_e}')
-            return {'success': True, 'uid': uid, 'provider': 'admin'}
-        except Exception as e:
-            print(f'[auth/register] Admin SDK error: {e}')
-            raise HTTPException(status_code=500, detail=f'Registration failed: {str(e)}')
-
-    # REST fallback
-    if FIREBASE_API_KEY:
-        try:
-            url = f'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}'
-            body = {
-                'email': payload.email,
-                'password': payload.password,
-                'returnSecureToken': True
-            }
-            r = requests.post(url, json=body)
-            r.raise_for_status()
-            resp_data = r.json()
-            uid = resp_data.get('localId')
-            
-            # If Admin SDK is not available but we got uid, try to store profile
-            if uid and SERVICE_ACCOUNT and admin_available and db:
-                profile['uid'] = uid
-                profile['createdAt'] = __import__('datetime').datetime.utcnow()
-                try:
-                    db.collection('users').document(uid).set(profile)
-                    print(f'[auth/register] REST fallback: User {uid} profile stored in Firestore')
-                except Exception as _e:
-                    print(f'Warning: failed to store profile for REST user {uid}: {_e}')
-            
-            print(f'[auth/register] REST fallback: User {uid} registered with profile fields')
-            return {
-                'success': True,
-                'uid': uid,
-                'provider': 'rest',
-                'idToken': resp_data.get('idToken'),
-                'refreshToken': resp_data.get('refreshToken')
-            }
-        except requests.HTTPError as exc:
-            error_detail = exc.response.json() if exc.response is not None else str(exc)
-            print(f'[auth/register] Firebase REST API error: {error_detail}')
-            raise HTTPException(status_code=400, detail=error_detail)
-        except Exception as e:
-            print(f'[auth/register] Request error: {e}')
-            raise HTTPException(status_code=500, detail=f'Registration request failed: {str(e)}')
-
-    error_msg = 'Firebase admin not configured and FIREBASE_API_KEY not set; cannot register users. Please create a .env file with FIREBASE_API_KEY.'
-    print(f'[auth/register] {error_msg}')
-    raise HTTPException(status_code=500, detail=error_msg)
+    # Insert into database
+    result = await db.users.insert_one(user_dict)
+    user_dict["_id"] = str(result.inserted_id)
+    
+    # Create access token
+    access_token = create_access_token(
+        data={"sub": payload.email, "user_id": str(result.inserted_id)},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    # Prepare user response
+    user_response = UserResponse(
+        _id=str(result.inserted_id),
+        email=user_dict["email"],
+        username=user_dict["username"],
+        profile=UserProfile(**user_dict["profile"]),
+        role=user_dict["role"],
+        is_active=user_dict["is_active"],
+        created_at=user_dict["created_at"]
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
 
 
-@router.post('/login')
-def login(payload: LoginPayload):
-    """Login using Firebase Auth REST API (requires FIREBASE_API_KEY). Returns idToken/refreshToken on success."""
-    if not FIREBASE_API_KEY:
-        raise HTTPException(status_code=500, detail='FIREBASE_API_KEY not set')
+@router.post('/login', response_model=Token)
+async def login(payload: UserLogin):
+    """
+    Login with email or username and password
+    
+    - **email_or_username**: Registered email address or username
+    - **password**: User password
+    
+    Returns JWT access token and user information
+    """
+    db = get_database()
+    
+    # Find user by email or username
+    # Try to determine if input is email or username
+    identifier = payload.email_or_username
+    
+    # Check if identifier contains @ (likely email)
+    if "@" in identifier:
+        user = await db.users.find_one({"email": identifier})
+    else:
+        # Try username first, then email
+        user = await db.users.find_one({"username": identifier})
+        if not user:
+            user = await db.users.find_one({"email": identifier})
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email/username or password"
+        )
+    
+    # Verify password
+    if not verify_password(payload.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email/username or password"
+        )
+    
+    # Check if user is active
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled"
+        )
+    
+    # Create access token
+    access_token = create_access_token(
+        data={"sub": user["email"], "user_id": str(user["_id"])},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    # Prepare user response
+    user_response = UserResponse(
+        _id=str(user["_id"]),
+        email=user["email"],
+        username=user.get("username", ""),
+        profile=UserProfile(**user.get("profile", {})),
+        role=user.get("role", "user"),
+        is_active=user.get("is_active", True),
+        created_at=user["created_at"]
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
+
+
+@router.get('/profile', response_model=UserResponse)
+async def get_profile(current_user: dict = Depends(get_current_user)):
+    """
+    Get current user profile
+    
+    Requires JWT authentication via Bearer token in Authorization header
+    """
+    db = get_database()
+    
+    user = await db.users.find_one({"email": current_user["email"]})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserResponse(
+        _id=str(user["_id"]),
+        email=user["email"],
+        username=user.get("username", ""),
+        profile=UserProfile(**user.get("profile", {})),
+        role=user.get("role", "user"),
+        is_active=user.get("is_active", True),
+        created_at=user["created_at"]
+    )
+
+
+@router.get('/profile/{user_id}', response_model=UserResponse)
+async def get_profile_by_id(user_id: str):
+    """
+    Get user profile by user ID (public endpoint)
+    
+    No authentication required - returns public profile information
+    """
+    db = get_database()
+    
     try:
-        url = f'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}'
-        body = {'email': payload.email, 'password': payload.password, 'returnSecureToken': True}
-        r = requests.post(url, json=body)
-        r.raise_for_status()
-        return r.json()
-    except requests.HTTPError as exc:
-        detail = exc.response.json() if exc.response is not None else str(exc)
-        raise HTTPException(status_code=400, detail=detail)
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID format"
+        )
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserResponse(
+        _id=str(user["_id"]),
+        email=user["email"],
+        username=user.get("username", ""),
+        profile=UserProfile(**user.get("profile", {})),
+        role=user.get("role", "user"),
+        is_active=user.get("is_active", True),
+        created_at=user["created_at"]
+    )
+
+
+@router.get('/profile/username/{username}', response_model=UserResponse)
+async def get_profile_by_username(username: str):
+    """
+    Get user profile by username (public endpoint)
+    
+    No authentication required - returns public profile information
+    """
+    db = get_database()
+    
+    user = await db.users.find_one({"username": username})
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserResponse(
+        _id=str(user["_id"]),
+        email=user["email"],
+        username=user.get("username", ""),
+        profile=UserProfile(**user.get("profile", {})),
+        role=user.get("role", "user"),
+        is_active=user.get("is_active", True),
+        created_at=user["created_at"]
+    )
+
+
+@router.put('/profile', response_model=UserResponse)
+async def update_profile(
+    payload: UpdateProfilePayload,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update current user profile
+    
+    Requires JWT authentication via Bearer token in Authorization header
+    """
+    db = get_database()
+    
+    # Update profile fields
+    update_data = {
+        "profile": payload.profile.dict(exclude_none=True),
+        "updated_at": datetime.utcnow()
+    }
+    
+    result = await db.users.find_one_and_update(
+        {"email": current_user["email"]},
+        {"$set": update_data},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserResponse(
+        _id=str(result["_id"]),
+        email=result["email"],
+        username=result.get("username", ""),
+        profile=UserProfile(**result.get("profile", {})),
+        role=result.get("role", "user"),
+        is_active=result.get("is_active", True),
+        created_at=result["created_at"]
+    )
+
+
+@router.put('/profile/{user_id}', response_model=UserResponse)
+async def update_profile_by_id(
+    user_id: str,
+    payload: UpdateProfilePayload,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update user profile by ID
+    
+    Requires JWT authentication. Users can only update their own profile.
+    """
+    db = get_database()
+    
+    # Verify user is updating their own profile
+    if current_user["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own profile"
+        )
+    
+    # Update profile fields
+    update_data = {
+        "profile": payload.profile.dict(exclude_none=True),
+        "updated_at": datetime.utcnow()
+    }
+    
+    try:
+        result = await db.users.find_one_and_update(
+            {"_id": ObjectId(user_id)},
+            {"$set": update_data},
+            return_document=True
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID format"
+        )
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserResponse(
+        _id=str(result["_id"]),
+        email=result["email"],
+        username=result.get("username", ""),
+        profile=UserProfile(**result.get("profile", {})),
+        role=result.get("role", "user"),
+        is_active=result.get("is_active", True),
+        created_at=result["created_at"]
+    )
+
+
+@router.get('/users', response_model=list[UserResponse])
+async def get_all_users(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all users (paginated)
+    
+    Requires JWT authentication. Returns list of all users.
+    
+    Query params:
+    - skip: Number of records to skip (default: 0)
+    - limit: Maximum number of records to return (default: 100, max: 1000)
+    """
+    db = get_database()
+    
+    # Limit maximum to prevent abuse
+    if limit > 1000:
+        limit = 1000
+    
+    cursor = db.users.find().skip(skip).limit(limit)
+    users = await cursor.to_list(length=limit)
+    
+    return [
+        UserResponse(
+            _id=str(user["_id"]),
+            email=user["email"],
+            username=user.get("username", ""),
+            profile=UserProfile(**user.get("profile", {})),
+            role=user.get("role", "user"),
+            is_active=user.get("is_active", True),
+            created_at=user["created_at"]
+        )
+        for user in users
+    ]
+
+
+@router.get('/status')
+async def auth_status():
+    """
+    Check authentication system status
+    
+    Returns information about MongoDB connection and JWT configuration
+    """
+    db = get_database()
+    
+    # Test MongoDB connection
+    try:
+        await db.command('ping')
+        mongo_connected = True
+        # Count users
+        user_count = await db.users.count_documents({})
+    except Exception as e:
+        mongo_connected = False
+        user_count = 0
+    
+    return {
+        "auth_type": "MongoDB + JWT",
+        "mongodb_connected": mongo_connected,
+        "mongodb_url": settings.MONGODB_URL,
+        "mongodb_database": settings.MONGODB_DB_NAME,
+        "user_count": user_count,
+        "jwt_algorithm": settings.ALGORITHM,
+        "token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    }
