@@ -452,34 +452,77 @@ export default function AnalyticExposureScreen() {
           <Text style={styles.chartTitle}>Diễn biến 13 ngày</Text>
         </View>
 
-        <View style={styles.barRow}>
-          {analyticsData.map((item, idx) => {
-            const heightRatio = item.aqi / maxAqi;
-            const barHeight = 90 * heightRatio + 10;
-            const isSelected = idx === selectedIdx;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={styles.barWrapper}
-                onPress={() => setSelectedIdx(idx)}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: barHeight,
-                      backgroundColor: getAQIColor(item.aqi),
-                      opacity: isSelected ? 1 : 0.7,
-                      borderWidth: isSelected ? 1.5 : 0,
-                      borderColor: '#0f172a',
-                    },
-                  ]}
-                />
-                <Text style={styles.barLabel}>{item.date}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        {/* Chart container with Y-axis */}
+        <View style={styles.chartContainer}>
+          {/* Y-axis labels */}
+          <View style={styles.yAxisContainer}>
+            <Text style={styles.yAxisLabel}>300</Text>
+            <Text style={styles.yAxisLabel}>250</Text>
+            <Text style={styles.yAxisLabel}>200</Text>
+            <Text style={styles.yAxisLabel}>150</Text>
+            <Text style={styles.yAxisLabel}>100</Text>
+            <Text style={styles.yAxisLabel}>50</Text>
+            <Text style={styles.yAxisLabel}>0</Text>
+          </View>
+
+          {/* Bars container */}
+          <View style={styles.barsContainer}>
+            {/* Grid lines */}
+            <View style={styles.gridLinesContainer}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={styles.gridLine} />
+              ))}
+            </View>
+
+            <View style={styles.barRow}>
+              {analyticsData.map((item, idx) => {
+                const heightRatio = Math.min(item.aqi, 300) / 300; // Max AQI 300
+                const barHeight = 120 * heightRatio + 5;
+                const isSelected = idx === selectedIdx;
+                const isToday = item.type === 'present';
+                
+                // Hiển thị label mỗi 3 ngày (index 0, 3, 6, 9, 12) hoặc ngày hôm nay
+                const shouldShowLabel = idx % 3 === 0 || isToday;
+                const dateLabel = isToday ? '' : item.date; // Hôm nay không hiển thị ngày
+                
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={styles.barWrapper}
+                    onPress={() => setSelectedIdx(idx)}
+                    activeOpacity={0.8}
+                  >
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          height: barHeight,
+                          backgroundColor: getAQIColor(item.aqi),
+                          opacity: isSelected ? 1 : 0.7,
+                          borderWidth: isToday ? 2 : (isSelected ? 1.5 : 0),
+                          borderColor: isToday ? '#2563eb' : '#0f172a',
+                          shadowColor: isToday ? '#2563eb' : 'transparent',
+                          shadowOpacity: isToday ? 0.3 : 0,
+                          shadowRadius: 4,
+                          shadowOffset: { width: 0, height: 2 },
+                          elevation: isToday ? 3 : 0,
+                        },
+                      ]}
+                    />
+                    {shouldShowLabel && (
+                      <View style={styles.barLabelContainer}>
+                        {isToday ? (
+                          <Text style={styles.barLabelTodayTag}>Hôm nay</Text>
+                        ) : (
+                          <Text style={styles.barLabel}>{dateLabel}</Text>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
 
         {/* Dynamic info box */}
@@ -768,7 +811,7 @@ const styles = StyleSheet.create({
   chartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   chartAccent: {
     width: 3,
@@ -782,26 +825,79 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  chartContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  yAxisContainer: {
+    width: 32,
+    height: 145,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingRight: 6,
+    paddingBottom: 30,
+  },
+  yAxisLabel: {
+    fontSize: 9,
+    color: '#9ca3af',
+    fontWeight: '600',
+  },
+  barsContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  gridLinesContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 145,
+    justifyContent: 'space-between',
+    paddingBottom: 30,
+  },
+  gridLine: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+  },
   barRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginTop: 8,
-    marginBottom: 8,
+    height: 145,
+    paddingBottom: 30,
   },
   barWrapper: {
     alignItems: 'center',
     flex: 1,
+    justifyContent: 'flex-end',
   },
   bar: {
     width: 10,
     borderRadius: 999,
     marginHorizontal: 2,
   },
+  barLabelContainer: {
+    position: 'absolute',
+    bottom: -26,
+    alignItems: 'center',
+  },
   barLabel: {
     marginTop: 4,
-    fontSize: 9,
+    fontSize: 8,
     color: '#9ca3af',
+    fontWeight: '700',
+  },
+  barLabelToday: {
+    color: '#2563eb',
+    fontWeight: '700',
+  },
+  barLabelTodayTag: {
+    marginTop: 1,
+    fontSize: 7,
+    color: '#2563eb',
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   selectedInfoCard: {
     marginTop: 8,
