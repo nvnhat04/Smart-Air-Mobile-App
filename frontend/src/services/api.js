@@ -9,7 +9,7 @@
 import Constants from 'expo-constants';
 
 // PRIORITY 1: Environment variable (from .env.local - highest priority for development)
-const ENV_BASE = process.env.REACT_APP_API_URL;
+const ENV_BASE = process.env.API_BASE_URL_ANDROID;
 
 // PRIORITY 2: app.json config (embedded in app bundle)
 let CONFIG_BASE = Constants.expoConfig?.extra?.backendUrl || Constants.manifest?.extra?.backendUrl;
@@ -79,12 +79,14 @@ try {
   console.warn('[api.js] Failed to auto-detect packager host:', e.message);
 }
 
-// Resolve BASE_URL with priority: env > detected > config > localhost
+// Resolve BASE_URL with priority: env > detected > config > localhost/emulator
 // Auto-detection (detected) is preferred over hardcoded config for network flexibility
-let BASE_URL = ENV_BASE || detectedBackendUrl || CONFIG_BASE || 'http://localhost:4000';
+// Use 10.0.2.2 for Android Emulator (maps to host machine's localhost)
+const DEFAULT_FALLBACK = 'http://10.0.2.2:8000'; // Android Emulator localhost
+let BASE_URL = ENV_BASE ||  DEFAULT_FALLBACK;
 
 console.warn(`[api.js] Initializing BASE_URL: ${BASE_URL}`);
-console.warn(`  priority: env=${ENV_BASE || 'not set'} > detected=${detectedBackendUrl || 'not set'} > config=${CONFIG_BASE || 'not set'} > localhost`);
+console.warn(`  priority: env=${ENV_BASE || 'not set'} > detected=${detectedBackendUrl || 'not set'} > config=${CONFIG_BASE || 'not set'} > fallback=${DEFAULT_FALLBACK}`);
 
 // Warn if using localhost on a physical device
 if (BASE_URL.includes('localhost') && Constants.executionEnvironment !== 'bare') {
@@ -111,15 +113,12 @@ if (CONFIG_AUTH_BASE && CONFIG_AUTH_BASE !== 'AUTO_DISCOVER') {
     } else {
       const b = BASE_URL.replace(/^https?:\/\//, '');
       hostForAuth = b.includes(':') ? b.split(':')[0] : b;
-      // Don't use localhost on physical devices
-      if (hostForAuth === 'localhost' || hostForAuth === '127.0.0.1') {
-        console.warn('[api.js] ⚠ Warning: Using localhost for auth server - this may not work on physical devices');
-      }
     }
     AUTH_BASE_URL = `http://${hostForAuth}:8000/auth`;
   } catch (e) {
-    AUTH_BASE_URL = 'http://localhost:8000/auth';
-    console.warn('[api.js] ⚠ Error calculating AUTH_BASE, using localhost fallback');
+    // Fallback for Android Emulator
+    AUTH_BASE_URL = 'http://10.0.2.2:8000/auth';
+    console.warn('[api.js] ⚠ Error calculating AUTH_BASE, using Android Emulator fallback');
   }
 }
 console.warn(`[api.js] AUTH_BASE: ${AUTH_BASE_URL}`);
@@ -132,17 +131,32 @@ const api = {
     return AUTH_BASE_URL;
   },
 
-  // POST /api/location
+  // POST /location/save
   // Records user's current position when they open the app
-  saveLocation: async (userId, lat, lng, aqi, address) => {
-    const url = `${BASE_URL}/api/location`;
+  saveLocation: async (userId, lat, lng, aqi, address, pm25 = null) => {
+    const url = `${AUTH_BASE_URL.replace('/auth', '')}/location/save`;
     console.warn(`[api.js] saveLocation: POST to ${url}`);
-    console.warn(`  userId=${userId}, lat=${lat}, lng=${lng}`);
+    console.warn(`  userId=${userId}, lat=${lat}, lng=${lng}, aqi=${aqi}, pm25=${pm25}`);
     try {
+      // Get JWT token from AsyncStorage
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) {
+        throw new Error('No auth token found. Please login first.');
+      }
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) {
+        throw new Error('No JWT token found in auth data.');
+      }
+
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, lat, lng, aqi, address })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: userId, lat, lng, aqi, pm25, address })
       });
       console.warn(`[api.js] saveLocation: Response status ${res.status}`);
       if (!res.ok) {
@@ -158,19 +172,93 @@ const api = {
     }
   },
 
-  // GET /api/location/history?userId=..
+  // GET /location/history?days=15&limit=100
   // Retrieves user's location history for analytics
-  getLocationHistory: async (userId) => {
-    const url = `${BASE_URL}/api/location/history?userId=${encodeURIComponent(userId)}`;
+  getLocationHistory: async (days = 15, limit = 100) => {
+    const url = `${BASE_URL}/location/history?days=${days}&limit=${limit}`;
     console.warn(`[api.js] getLocationHistory: GET from ${url}`);
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Get JWT token from AsyncStorage
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) {
+        throw new Error('No auth token found. Please login first.');
+      }
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) {
+        throw new Error('No JWT token found in auth data.');
+      }
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
       const data = await res.json();
-      console.warn(`[api.js] getLocationHistory: Success`, data);
+      console.warn(`[api.js] getLocationHistory: Success, got ${data.length} records`);
       return data;
     } catch (err) {
       console.error(`[api.js] getLocationHistory: Error: ${err.message}`);
+      throw err;
+    }
+  },
+
+  // GET /location/stats?days=15
+  // Get location statistics
+  getLocationStats: async (days = 15) => {
+    const url = `${AUTH_BASE_URL.replace('/auth', '')}/location/stats?days=${days}`;
+    console.warn(`[api.js] getLocationStats: GET from ${url}`);
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) {
+        throw new Error('No auth token found. Please login first.');
+      }
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) {
+        throw new Error('No JWT token found in auth data.');
+      }
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      console.warn(`[api.js] getLocationStats: Success`, data);
+      return data;
+    } catch (err) {
+      console.error(`[api.js] getLocationStats: Error: ${err.message}`);
+      throw err;
+    }
+  },
+
+  // GET /pm25/forecast?lat=21.0285&lon=105.8542&days=7
+  // Get PM2.5 forecast for a location
+  getPM25Forecast: async (lat, lon, days = 7) => {
+    const url = `${BASE_URL}/pm25/forecast?lat=${lat}&lon=${lon}&days=${days}`;
+    console.warn(`[api.js] getPM25Forecast: GET from ${url}`);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      console.warn(`[api.js] getPM25Forecast: Success, got ${data.forecast?.length || 0} days`);
+      return data;
+    } catch (err) {
+      console.error(`[api.js] getPM25Forecast: Error: ${err.message}`);
       throw err;
     }
   }
@@ -178,10 +266,11 @@ const api = {
 
 // Auth helpers
 api.auth = {
-  register: async (email, password, profile = {}) => {
+  register: async (email, username, password, profile = {}) => {
     /**
      * Register a new user with extended profile information.
      * @param {string} email - User email
+     * @param {string} username - Unique username (3-20 chars, alphanumeric + underscore)
      * @param {string} password - User password
      * @param {object} profile - User profile containing:
      *   - displayName: string (optional)
@@ -198,6 +287,7 @@ api.auth = {
     console.warn(`[api.js] auth.register -> POST ${url}`);
     console.warn(`[api.js] auth.register: profile fields:`, {
       email,
+      username,
       displayName: profile.displayName,
       gender: profile.gender,
       age: profile.age,
@@ -210,7 +300,7 @@ api.auth = {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, profile })
+        body: JSON.stringify({ email, username, password, profile })
       });
       if (!res.ok) {
         const text = await res.text();
@@ -232,14 +322,15 @@ api.auth = {
     }
   },
 
-  login: async (email, password) => {
+  login: async (emailOrUsername, password) => {
     const url = `${api.AUTH_BASE}/login`;
     console.warn(`[api.js] auth.login -> POST ${url}`);
+    console.warn(`[api.js] auth.login: identifier=${emailOrUsername}`);
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email_or_username: emailOrUsername, password })
       });
       if (!res.ok) {
         const text = await res.text();
