@@ -10,7 +10,7 @@ export const processLocationHistory = async (historyData) => {
   const today = new Date();
   const analyticsData = [];
   
-  // Group history by date
+  // Group history by date and collect all records for averaging
   const historyByDate = {};
   // Track location frequency and coordinates for forecast
   const locationFrequency = {};
@@ -21,10 +21,11 @@ export const processLocationHistory = async (historyData) => {
     const recordDate = new Date(record.timestamp);
     const dateKey = getDateKey(recordDate);
     
-    // Group by date (take first record of each day)
+    // Group by date (collect ALL records of each day for averaging)
     if (!historyByDate[dateKey]) {
-      historyByDate[dateKey] = record;
+      historyByDate[dateKey] = [];
     }
+    historyByDate[dateKey].push(record);
     
     // Track location frequency
     const locationKey = record.address || record.name;
@@ -42,37 +43,63 @@ export const processLocationHistory = async (historyData) => {
   const mostVisitedLocation = sortedLocations[0] || null;
   const mostVisitedCoords = mostVisitedLocation ? locationCoords[mostVisitedLocation] : null;
   
-  // Add past 7 days from history
+  // Add past 6 days from history (calculate average AQI per day)
   for (let i = -6; i < 0; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     const dateKey = getDateKey(date);
     const dateStr = formatDate(date);
     
-    const record = historyByDate[dateKey];
-    if (record) {
+    const dayRecords = historyByDate[dateKey];
+    if (dayRecords && dayRecords.length > 0) {
+      // Calculate average AQI for the day
+      const totalAqi = dayRecords.reduce((sum, record) => sum + (record.aqi || 0), 0);
+      const avgAqi = Math.round(totalAqi / dayRecords.length);
+      
+      // Get most frequent location for the day
+      const dayLocationFreq = {};
+      dayRecords.forEach(record => {
+        const loc = record.address || record.name || 'Unknown';
+        dayLocationFreq[loc] = (dayLocationFreq[loc] || 0) + 1;
+      });
+      const mostFrequentLocation = Object.entries(dayLocationFreq)
+        .sort((a, b) => b[1] - a[1])[0][0];
+      
       analyticsData.push({
         key: i.toString(),
         date: dateStr,
-        aqi: record.aqi || 0,
-        location: record.address || record.name || 'Unknown',
+        aqi: avgAqi,
+        location: mostFrequentLocation,
         type: 'past',
+        recordCount: dayRecords.length, // Số bản ghi đã tính trung bình
       });
     }
   }
   
-  // Add today
+  // Add today (calculate average if multiple records)
   const todayStr = formatDate(today);
   const todayKey = getDateKey(today);
-  const todayRecord = historyByDate[todayKey];
+  const todayRecords = historyByDate[todayKey];
   
-  if (todayRecord) {
+  if (todayRecords && todayRecords.length > 0) {
+    const totalAqi = todayRecords.reduce((sum, record) => sum + (record.aqi || 0), 0);
+    const avgAqi = Math.round(totalAqi / todayRecords.length);
+    
+    const dayLocationFreq = {};
+    todayRecords.forEach(record => {
+      const loc = record.address || record.name || 'Unknown';
+      dayLocationFreq[loc] = (dayLocationFreq[loc] || 0) + 1;
+    });
+    const mostFrequentLocation = Object.entries(dayLocationFreq)
+      .sort((a, b) => b[1] - a[1])[0][0];
+    
     analyticsData.push({
       key: '0',
       date: todayStr,
-      aqi: todayRecord.aqi || 0,
-      location: todayRecord.address || todayRecord.name || 'Unknown',
+      aqi: avgAqi,
+      location: mostFrequentLocation,
       type: 'present',
+      recordCount: todayRecords.length,
     });
   }
   
@@ -86,9 +113,12 @@ export const processLocationHistory = async (historyData) => {
     const pastDateKey = getDateKey(pastDate);
     const pastDateStr = formatDateSlash(pastDate);
     
-    const pastRecord = historyByDate[pastDateKey];
+    const pastDayRecords = historyByDate[pastDateKey];
     
-    if (pastRecord && pastRecord.latitude && pastRecord.longitude) {
+    if (pastDayRecords && pastDayRecords.length > 0) {
+      // Lấy bản ghi đầu tiên trong ngày (hoặc có thể lấy bản ghi với AQI cao nhất)
+      const pastRecord = pastDayRecords[0];
+      
       // Validate coordinates
       const lat = parseFloat(pastRecord.latitude);
       const lon = parseFloat(pastRecord.longitude);

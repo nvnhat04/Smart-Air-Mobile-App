@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocationTracking } from '../hooks/useLocationTracking';
+import api from '../services/api';
 import {
   getAQIColor,
   getExposureMultiplier,
@@ -95,6 +96,10 @@ export default function AnalyticExposureScreen() {
   const [exposureMode, setExposureMode] = useState('outdoor'); // 'outdoor', 'indoor', 'indoor_purifier'
   const [showExposureMenu, setShowExposureMenu] = useState(false);
   const [userLocation, setUserLocation] = useState(null); // Vị trí thực của user từ GPS/history
+  const [locationStats, setLocationStats] = useState(null); // Stats from API
+  const [escapeDestinations, setEscapeDestinations] = useState([]); // Destinations with real AQI
+  const [loadingDestinations, setLoadingDestinations] = useState(false);
+  const [destinationsLoaded, setDestinationsLoaded] = useState(false); // Track if already loaded
   
   // Load location history khi component mount (7 ngày)
   useEffect(() => {
@@ -104,6 +109,15 @@ export default function AnalyticExposureScreen() {
         const history = await getLocationHistory(7); // Chỉ lấy 7 ngày
         setHistoryData(history);
         console.log('[AnalyticExposureScreen] Loaded 7-day history:', history.length, 'records');
+        
+        // Call API to get location stats
+        try {
+          const stats = await api.getLocationStats(7);
+          setLocationStats(stats);
+          console.log('[AnalyticExposureScreen] Location stats:', stats);
+        } catch (statsError) {
+          console.warn('[AnalyticExposureScreen] Failed to load stats:', statsError.message);
+        }
         
         // Lấy vị trí gần nhất của user từ history
         if (history.length > 0) {
@@ -131,29 +145,216 @@ export default function AnalyticExposureScreen() {
     loadHistory();
   }, [getLocationHistory]);
 
-  // Mock data "trốn bụi đi chơi"
-  const allDestinations = useMemo(
+  // Calculate distance between two coordinates (Haversine formula)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Calculate estimated drive time based on distance
+  const calculateDriveTime = (distance) => {
+    const avgSpeed = 40; // km/h average speed
+    const hours = distance / avgSpeed;
+    if (hours < 1) {
+      return `${Math.round(hours * 60)} phút`;
+    }
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`;
+  };
+
+  // Base destinations with coordinates and recommendations
+  const baseDestinations = useMemo(
     () => [
-      { id: 1, name: 'Ecopark, Hưng Yên', aqi: 40, weatherType: 'sun', temp: 24, distance: 18, driveTime: '35 phút', recommendation: 'Công viên sinh thái, hồ nước rộng, đạp xe dạo chơi' },
-      { id: 2, name: 'Công viên Yên Sở', aqi: 45, weatherType: 'sun', temp: 23, distance: 12, driveTime: '25 phút', recommendation: 'Hồ rộng, chạy bộ, picnic gia đình, không gian xanh' },
-      { id: 3, name: 'Làng cổ Đường Lâm', aqi: 48, weatherType: 'cloud', temp: 22, distance: 45, driveTime: '1 giờ 10 phút', recommendation: 'Làng cổ 1200 năm, nhà sàn truyền thống, ẩm thực đặc sản' },
-      { id: 4, name: 'Khu du lịch Sơn Tây', aqi: 44, weatherType: 'sun', temp: 21, distance: 42, driveTime: '1 giờ', recommendation: 'Thành cổ Sơn Tây, núi non hùng vĩ, không khí trong lành' },
-      { id: 5, name: 'Vườn Vua Resort', aqi: 38, weatherType: 'sun', temp: 25, distance: 35, driveTime: '50 phút', recommendation: 'Resort sinh thái, vườn cây ăn trái, trải nghiệm làm vườn' },
-      { id: 6, name: 'Ba Vì, Hà Nội', aqi: 42, weatherType: 'sun', temp: 21, distance: 65, driveTime: '1 giờ 45 phút', recommendation: 'Vườn quốc gia, suối nước nóng, cắm trại rừng thông' },
-      { id: 7, name: 'Chùa Hương, Mỹ Đức', aqi: 48, weatherType: 'cloud', temp: 22, distance: 60, driveTime: '1 giờ 40 phút', recommendation: 'Di tích lịch sử, chèo thuyền suối Yến, núi non hữu tình' },
-      { id: 8, name: 'Đại Lải, Vĩnh Phúc', aqi: 38, weatherType: 'sun', temp: 23, distance: 55, driveTime: '1 giờ 20 phút', recommendation: 'Hồ Đại Lải xanh mát, resort nghỉ dưỡng, thể thao nước' },
-      { id: 9, name: 'Tam Đảo, Vĩnh Phúc', aqi: 35, weatherType: 'cloud', temp: 18, distance: 85, driveTime: '2 giờ 15 phút', recommendation: 'Săn mây, check-in Thác Bạc, khí hậu mát mẻ quanh năm' },
-      { id: 10, name: 'Thung Nham, Ninh Bình', aqi: 36, weatherType: 'sun', temp: 24, distance: 95, driveTime: '2 giờ 30 phút', recommendation: 'Hang động, vườn chim, kayaking, cảnh quan tuyệt đẹp' },
+      { 
+        id: 1, 
+        name: 'Ecopark, Hưng Yên', 
+        recommendation: 'Công viên sinh thái, hồ nước rộng, đạp xe dạo chơi',
+        lat: 20.9578,
+        lon: 105.9369,
+      },
+      { 
+        id: 2, 
+        name: 'Công viên Yên Sở', 
+        recommendation: 'Hồ rộng, chạy bộ, picnic gia đình, không gian xanh',
+        lat: 20.9995,
+        lon: 105.8673,
+      },
+      { 
+        id: 3, 
+        name: 'Làng cổ Đường Lâm', 
+        recommendation: 'Làng cổ 1200 năm, nhà sàn truyền thống, ẩm thực đặc sản',
+        lat: 21.1594,
+        lon: 105.4600,
+      },
+      { 
+        id: 4, 
+        name: 'Khu du lịch Sơn Tây', 
+        recommendation: 'Thành cổ Sơn Tây, núi non hùng vĩ, không khí trong lành',
+        lat: 21.1498,
+        lon: 105.5192,
+      },
+      { 
+        id: 5, 
+        name: 'Vườn Vua Resort', 
+        recommendation: 'Resort sinh thái, vườn cây ăn trái, trải nghiệm làm vườn',
+        lat: 21.1300,
+        lon: 105.3300,
+      },
+      { 
+        id: 6, 
+        name: 'Ba Vì, Hà Nội', 
+        recommendation: 'Vườn quốc gia, suối nước nóng, cắm trại rừng thông',
+        lat: 21.1400,
+        lon: 105.2900,
+      },
+      { 
+        id: 7, 
+        name: 'Chùa Hương, Mỹ Đức', 
+        recommendation: 'Di tích lịch sử, chèo thuyền suối Yến, núi non hữu tình',
+        lat: 20.6400,
+        lon: 105.5700,
+      },
+      { 
+        id: 8, 
+        name: 'Đại Lải, Vĩnh Phúc', 
+        recommendation: 'Hồ Đại Lải xanh mát, resort nghỉ dưỡng, thể thao nước',
+        lat: 21.3500,
+        lon: 105.5860,
+      },
+      { 
+        id: 9, 
+        name: 'Tam Đảo, Vĩnh Phúc', 
+        recommendation: 'Săn mây, check-in Thác Bạc, khí hậu mát mẻ quanh năm',
+        lat: 21.3000,
+        lon: 105.5500,
+      },
+      { 
+        id: 10, 
+        name: 'Thung Nham, Ninh Bình', 
+        recommendation: 'Hang động, vườn chim, kayaking, cảnh quan tuyệt đẹp',
+        lat: 20.2215,
+        lon: 105.8600,
+      },
     ],
     [],
   );
 
+  // Load destinations only when escape tab is active (lazy loading)
+  useEffect(() => {
+    if (activeTab !== 'escape' || !userLocation || destinationsLoaded) return;
+
+    const loadDestinationsAQI = async () => {
+      setLoadingDestinations(true);
+      try {
+        // Limit concurrent requests to 3 at a time to avoid overwhelming the server
+        const batchSize = 3;
+        const results = [];
+        
+        for (let i = 0; i < baseDestinations.length; i += batchSize) {
+          const batch = baseDestinations.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(async (dest) => {
+              try {
+                // Calculate distance and drive time
+                const distance = Math.round(calculateDistance(
+                  userLocation.latitude,
+                  userLocation.longitude,
+                  dest.lat,
+                  dest.lon
+                ));
+                const driveTime = calculateDriveTime(distance);
+
+                // Use forecast API only (includes current data in response)
+                const forecastData = await api.getPM25Forecast(dest.lat, dest.lon, 3);
+                
+                // Get forecast for 48 hours from now
+                const now = new Date();
+                const target48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+                const targetDateStr = target48h.toISOString().split('T')[0];
+                
+                // Get current data (first item in forecast)
+                const currentForecast = forecastData?.forecast?.[0];
+                const currentAqi = currentForecast?.aqi || 0;
+                
+                // Find the forecast for 48h
+                const forecastFor48h = forecastData?.forecast?.find(f => f.date === targetDateStr);
+                
+                let aqi48h = currentAqi;
+                let pm25_48h = currentForecast?.pm25 || 0;
+                let hasForecast = false;
+                
+                if (forecastFor48h && forecastFor48h.aqi > 0) {
+                  aqi48h = forecastFor48h.aqi;
+                  pm25_48h = forecastFor48h.pm25;
+                  hasForecast = true;
+                }
+                
+                return {
+                  ...dest,
+                  aqi: aqi48h,
+                  pm25: pm25_48h,
+                  currentAqi,
+                  hasForecast,
+                  distance,
+                  driveTime,
+                  temp: currentForecast?.weather?.temp || 20,
+                  weatherType: currentForecast?.weather?.main === 'Clear' ? 'sun' : 'cloud',
+                };
+              } catch (error) {
+                console.error(`[AnalyticExposureScreen] Failed to load ${dest.name}:`, error.message);
+                // Return with minimal data on error
+                const distance = Math.round(calculateDistance(
+                  userLocation.latitude,
+                  userLocation.longitude,
+                  dest.lat,
+                  dest.lon
+                ));
+                return {
+                  ...dest,
+                  aqi: 0,
+                  pm25: 0,
+                  currentAqi: 0,
+                  hasForecast: false,
+                  distance,
+                  driveTime: calculateDriveTime(distance),
+                  temp: 20,
+                  weatherType: 'cloud',
+                };
+              }
+            })
+          );
+          results.push(...batchResults);
+        }
+
+        console.log('[AnalyticExposureScreen] Loaded destinations:', results.length, 'total');
+        console.log('[AnalyticExposureScreen] With forecast:', results.filter(d => d.hasForecast).length);
+        setEscapeDestinations(results);
+        setDestinationsLoaded(true); // Mark as loaded to avoid reloading
+      } catch (error) {
+        console.error('[AnalyticExposureScreen] Failed to load destinations:', error);
+      } finally {
+        setLoadingDestinations(false);
+      }
+    };
+
+    loadDestinationsAQI();
+  }, [activeTab, userLocation, baseDestinations, destinationsLoaded]);
+
+
   const filteredDestinations = useMemo(
     () =>
-      allDestinations
-        .filter((d) => d.distance <= selectedRadius)
+      escapeDestinations
+        .filter((d) => d.distance <= selectedRadius && d.currentAqi > 0) // Only filter out complete API failures
         .sort((a, b) => a.aqi - b.aqi),
-    [allDestinations, selectedRadius],
+    [escapeDestinations, selectedRadius],
   );
 
   // Filter history data theo ngày (PHẢI ĐẶT TRƯỚC if/return để tuân thủ Rules of Hooks)
@@ -192,10 +393,23 @@ export default function AnalyticExposureScreen() {
     );
   }
 
-  const selectedData = analyticsData[selectedIdx];
+  const selectedData = analyticsData[selectedIdx] || {
+    key: '0',
+    date: '--/--',
+    aqi: 0,
+    location: 'Chưa có dữ liệu',
+    type: 'present',
+  };
 
   // Hàm tính hệ số phơi nhiễm
   const exposureMultiplier = getExposureMultiplier(exposureMode);
+
+  // Use API stats if available, otherwise fallback to manual calculation
+  const pastAvg = locationStats 
+    ? Math.round(locationStats.avg_aqi * exposureMultiplier)
+    : analyticsData.filter(d => d.type === 'past').length > 0
+      ? Math.round(analyticsData.filter(d => d.type === 'past').reduce((sum, d) => sum + d.aqi, 0) / analyticsData.filter(d => d.type === 'past').length * exposureMultiplier)
+      : 0;
 
   // Phân chia dựa trên type (past/present/future) thay vì index cố định
   const pastSlice = analyticsData.filter(d => d.type === 'past');
@@ -203,16 +417,27 @@ export default function AnalyticExposureScreen() {
   const futureSlice = analyticsData.filter(d => d.type === 'future');
   
   // Tính trung bình chỉ cho các ngày có data và áp dụng hệ số phơi nhiễm
-  const pastAvg = pastSlice.length > 0 
-    ? Math.round(pastSlice.reduce((sum, d) => sum + d.aqi, 0) / pastSlice.length * exposureMultiplier)
-    : 0;
   const futureAvg = futureSlice.length > 0
     ? Math.round(futureSlice.reduce((sum, d) => sum + d.aqi, 0) / futureSlice.length * exposureMultiplier)
     : 0;
   const diff = futureAvg - pastAvg;
 
-  const pastPm25Avg = (pastAvg * 0.6).toFixed(1);
-  const futurePm25Avg = (futureAvg * 0.6).toFixed(1);
+  // Convert AQI to PM2.5 using proper EPA formula
+  const aqiToPm25 = (aqi) => {
+    if (aqi <= 50) return ((aqi - 0) / (50 - 0)) * (12.0 - 0) + 0;
+    if (aqi <= 100) return ((aqi - 51) / (100 - 51)) * (35.4 - 12.1) + 12.1;
+    if (aqi <= 150) return ((aqi - 101) / (150 - 101)) * (55.4 - 35.5) + 35.5;
+    if (aqi <= 200) return ((aqi - 151) / (200 - 151)) * (150.4 - 55.5) + 55.5;
+    if (aqi <= 300) return ((aqi - 201) / (300 - 201)) * (250.4 - 150.5) + 150.5;
+    return ((aqi - 301) / (500 - 301)) * (500.4 - 250.5) + 250.5;
+  };
+
+  // Use API stats PM2.5 if available, otherwise convert from AQI
+  const pastPm25Avg = locationStats
+    ? (locationStats.avg_pm25 * exposureMultiplier).toFixed(1)
+    : aqiToPm25(pastAvg).toFixed(1);
+  
+  const futurePm25Avg = aqiToPm25(futureAvg).toFixed(1);
   const cigPast = (pastPm25Avg / 22).toFixed(1);
   const cigFuture = (futurePm25Avg / 22).toFixed(1);
 
@@ -649,49 +874,90 @@ export default function AnalyticExposureScreen() {
 
         <Text style={styles.weekendSectionHeading}>Gợi ý hàng đầu</Text>
 
-        {userLocation && filteredDestinations.map((dest) => {
-          const cleanRatio = (userLocation.aqi / dest.aqi).toFixed(1);
-          return (
-            <View key={dest.id} style={styles.weekendCardOuter}>
-              <ImageBackground
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&q=80',
-                }}
-                style={styles.weekendCardImage}
-                imageStyle={styles.weekendCardImageStyle}
-              >
-                <View style={styles.weekendCardOverlay} />
-                <View style={styles.weekendCardInner}>
-                  <View style={styles.weekendCardHeader}>
-                    <View>
-                      <Text style={styles.weekendCardTitle}>{dest.name}</Text>
-                      <Text style={styles.weekendMetaText}>
-                        {dest.distance} km • {dest.driveTime}
-                      </Text>
+        {loadingDestinations ? (
+          <View style={styles.loadingDestinationsContainer}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={styles.loadingDestinationsText}>Đang tải dữ liệu địa điểm...</Text>
+          </View>
+        ) : filteredDestinations.length === 0 ? (
+          <View style={styles.emptyDestinationsContainer}>
+            <Feather name="map" size={48} color="#cbd5e1" />
+            <Text style={styles.emptyDestinationsText}>
+              {!userLocation 
+                ? 'Vui lòng lưu vị trí để xem gợi ý' 
+                : escapeDestinations.length === 0
+                ? 'Không thể tải dữ liệu địa điểm'
+                : 'Không có địa điểm nào trong bán kính này'}
+            </Text>
+            {userLocation && escapeDestinations.length === 0 && (
+              <Text style={styles.emptyDestinationsSubtext}>
+                Vui lòng kiểm tra kết nối mạng và thử lại
+              </Text>
+            )}
+          </View>
+        ) : (
+          userLocation && filteredDestinations.map((dest) => {
+            const cleanRatio = (userLocation.aqi / dest.aqi).toFixed(1);
+            const aqiChange = dest.currentAqi > 0 ? dest.aqi - dest.currentAqi : 0;
+            const aqiChangePercent = dest.currentAqi > 0 
+              ? Math.round((aqiChange / dest.currentAqi) * 100)
+              : 0;
+            
+            return (
+              <View key={dest.id} style={styles.weekendCardOuter}>
+                <ImageBackground
+                  source={{
+                    uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&q=80',
+                  }}
+                  style={styles.weekendCardImage}
+                  imageStyle={styles.weekendCardImageStyle}
+                >
+                  <View style={styles.weekendCardOverlay} />
+                  <View style={styles.weekendCardInner}>
+                    <View style={styles.weekendCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.weekendCardTitle}>{dest.name}</Text>
+                        <Text style={styles.weekendMetaText}>
+                          {dest.distance} km • {dest.driveTime}
+                        </Text>
+                        {dest.currentAqi > 0 && aqiChange !== 0 && (
+                          <View style={[
+                            styles.forecastBadge,
+                            aqiChange < 0 ? styles.forecastBadgeGood : styles.forecastBadgeBad
+                          ]}>
+                            <Text style={[
+                              styles.forecastBadgeText,
+                              aqiChange < 0 ? styles.forecastBadgeTextGood : styles.forecastBadgeTextBad
+                            ]}>
+                              {aqiChange < 0 ? '↓' : '↑'} {Math.abs(aqiChangePercent)}% sau 48h
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.weekendAqiBadge}>
+                        <Text style={styles.weekendAqiLabel}>AQI</Text>
+                        <Text style={styles.weekendAqiValue}>{dest.aqi}</Text>
+                      </View>
                     </View>
-                    <View style={styles.weekendAqiBadge}>
-                      <Text style={styles.weekendAqiLabel}>AQI</Text>
-                      <Text style={styles.weekendAqiValue}>{dest.aqi}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.weekendStatsRow}>
-                    <View style={styles.weekendStatBox}>
-                      <Text style={styles.weekendStatLabel}>Độ sạch</Text>
-                      <Text style={styles.weekendStatValue}>Gấp {cleanRatio} lần</Text>
+                    <View style={styles.weekendStatsRow}>
+                      <View style={styles.weekendStatBox}>
+                        <Text style={styles.weekendStatLabel}>Độ sạch</Text>
+                        <Text style={styles.weekendStatValue}>Gấp {cleanRatio} lần</Text>
+                      </View>
+                      <View style={styles.weekendStatBox}>
+                        <Text style={styles.weekendStatLabel}>Thời tiết</Text>
+                        <Text style={styles.weekendStatValue}>{dest.temp}°C</Text>
+                      </View>
                     </View>
-                    <View style={styles.weekendStatBox}>
-                      <Text style={styles.weekendStatLabel}>Thời tiết</Text>
-                      <Text style={styles.weekendStatValue}>{dest.temp}°C</Text>
-                    </View>
-                  </View>
 
-                  <Text style={styles.weekendRecommendation}>💡 {dest.recommendation}</Text>
-                </View>
-              </ImageBackground>
-            </View>
-          );
-        })}
+                    <Text style={styles.weekendRecommendation}>💡 {dest.recommendation}</Text>
+                  </View>
+                </ImageBackground>
+              </View>
+            );
+          })
+        )}
       </View>
         </View>
       )}
@@ -1678,6 +1944,66 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 11,
     color: '#e5e7eb',
+  },
+  forecastBadge: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  forecastBadgeGood: {
+    backgroundColor: 'rgba(187, 247, 208, 0.9)',
+  },
+  forecastBadgeBad: {
+    backgroundColor: 'rgba(254, 226, 226, 0.9)',
+  },
+  forecastBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  forecastBadgeTextGood: {
+    color: '#14532d',
+  },
+  forecastBadgeTextBad: {
+    color: '#7f1d1d',
+  },
+  loadingDestinationsContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 48,
+    alignItems: 'center',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  loadingDestinationsText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  emptyDestinationsContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 48,
+    alignItems: 'center',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyDestinationsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyDestinationsSubtext: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4,
+    textAlign: 'center',
   },
 });
 

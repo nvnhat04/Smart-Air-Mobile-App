@@ -25,7 +25,7 @@ const WeekendCard = ({ destination, userLocation }) => {
               </View>
             </View>
             <View style={[styles.aqiBadge, { backgroundColor: getAQIColor(destination.aqi) }]}>
-              <Text style={styles.aqiLabel}>AQI</Text>
+              <Text style={styles.aqiLabel}>AQ</Text>
               <Text style={styles.aqiValue}>{destination.aqi}</Text>
             </View>
           </View>

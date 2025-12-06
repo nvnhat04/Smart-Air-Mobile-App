@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SmartAir",
-    "slug": "smart-air-mobile-app",
+    "name": "Smart Air",
+    "slug": "smart-air",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./public/logo_smartair.png",
@@ -19,14 +19,19 @@
         "foregroundImage": "./public/logo_smartair.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.nvnhat04sorganization.smartair"
     },
     "web": {
       "favicon": "./public/logo_smartair.png"
     },
     "extra": {
       "backendUrl": "AUTO_DISCOVER",
-      "authServerUrl": "AUTO_DISCOVER"
-    }
+      "authServerUrl": "AUTO_DISCOVER",
+      "eas": {
+        "projectId": "b02aaf8b-bdc0-4f1c-a680-46f7e5da1b81"
+      }
+    },
+    "owner": "nvnhat04s-organization"
   }
 }

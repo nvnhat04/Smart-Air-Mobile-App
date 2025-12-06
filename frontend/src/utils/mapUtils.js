@@ -36,9 +36,9 @@ export const createDayOptions = () => {
  * @returns {Object} Health advice object with text and action
  */
 export const getHealthAdvice = (aqi, userGroup = 'normal') => {
-  console.log('🏥 getHealthAdvice called with:', { aqi, userGroup });
+  // console.log('🏥 getHealthAdvice called with:', { aqi, userGroup });
   const isSensitive = userGroup === 'sensitive';
-  console.log('🏥 isSensitive:', isSensitive);
+  // console.log('🏥 isSensitive:', isSensitive);
   
   // AQI 0-50: Tốt (Good)
   if (!aqi || aqi <= 50) {
@@ -62,7 +62,7 @@ export const getHealthAdvice = (aqi, userGroup = 'normal') => {
       level: 'moderate',
       color: '#eab308'
     };
-    console.log('🏥 Returning for AQI 51-100:', result.text);
+    // console.log('🏥 Returning for AQI 51-100:', result.text);
     return result;
   }
   

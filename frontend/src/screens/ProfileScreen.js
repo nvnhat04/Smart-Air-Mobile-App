@@ -113,15 +113,14 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>Your Profile 👤</Text>
+      <Text style={styles.title}></Text>
       
       {/* Primary Auth Details Card */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Account Info</Text>
-        <ProfileRow icon="person-circle-outline" label="User ID" value={auth.uid} />
         <ProfileRow icon="mail-outline" label="Email" value={auth.email} />
         {auth.username && (
-          <ProfileRow icon="at-outline" label="Username" value={`@${auth.username}`} />
+          <ProfileRow icon="at-outline" label="Username" value={`${auth.username}`} />
         )}
       </View>
       
@@ -150,6 +149,14 @@ export default function ProfileScreen() {
         <Ionicons name="log-out-outline" size={22} color={colors.cardBackground} style={{ marginRight: 8 }} />
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
+      
+      {/* User ID at bottom - small and subtle */}
+      {auth.uid && (
+        <View style={styles.userIdContainer}>
+          <Text style={styles.userIdLabel}>User ID: </Text>
+          <Text style={styles.userIdValue}>{auth.uid}</Text>
+        </View>
+      )}
       
     </ScrollView>
   );
@@ -188,7 +195,7 @@ const styles = StyleSheet.create({
 
   // Headings
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: 25,
@@ -300,5 +307,27 @@ const styles = StyleSheet.create({
     color: colors.cardBackground,
     fontWeight: '700',
     fontSize: 16,
+  },
+  
+  // User ID at bottom
+  userIdContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  userIdLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '400',
+  },
+  userIdValue: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    fontFamily: 'monospace',
   }
 });
