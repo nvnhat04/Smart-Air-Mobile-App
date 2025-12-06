@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { config } from '../../config';
-
+import { BASE_URL } from '../services/api';
 function generateWeeklyData(baseColor) {
   const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
   const today = new Date();
@@ -67,8 +67,8 @@ export default function DetailStationScreen() {
         console.log('🔄 Fetching 7-day forecast for:', station.lat, station.lon);
         
         // Lấy API URL từ config
-        const baseURL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.android;
-        const url = `${baseURL}/pm25/forecast?lat=${station.lat}&lon=${station.lon}&days=7`;
+        // const baseURL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.android;
+        const url = `${BASE_URL}/pm25/forecast?lat=${station.lat}&lon=${station.lon}&days=7`;
         
         console.log('🔗 Forecast URL:', url);
         

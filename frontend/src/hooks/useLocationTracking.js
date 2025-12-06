@@ -114,13 +114,14 @@ export const useLocationTracking = (enabled = true) => {
       }
 
       // Lấy vị trí hiện tại
-    //   const location = await Location.getCurrentPositionAsync({
-    //     accuracy: Location.Accuracy.Balanced,
-    //   });
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
 
-    //   const { latitude, longitude } = location.coords;
-    const latitude = 21.0278; // Example latitude
-    const longitude = 105.8342; // Example longitude
+      const { latitude, longitude } = location.coords;
+
+    // const latitude = 21.0278; // Example latitude
+    // const longitude = 105.8342; // Example longitude
 
       // Tính AQI nếu có PM2.5 trong additionalData
       const { aqi, address, pm25 } = additionalData;

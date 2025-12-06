@@ -1,10 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { WebView } from 'react-native-webview';
+import { BASE_URL } from '../../services/api';
 
-// To keep things simple, we inline the same Leaflet HTML used previously.
-// This component is focused ONLY on rendering the map + emitting station clicks
-// and exposing helpers (__setMapCenter, __setWmsDate) to React Native.
-const LEAFLET_HTML = `
+// Generate Leaflet HTML with dynamic BASE_URL
+const generateLeafletHTML = (baseUrl) => `
 <!DOCTYPE html>
 <html lang="vi">
   <head>
@@ -58,9 +57,9 @@ const LEAFLET_HTML = `
         // Chuyển đổi date format nếu cần (YYYY-MM-DD -> YYYYMMDD)
         const dateParam = dateStr ? dateStr.replace(/-/g, '') : currentDate;
         
-        // Sử dụng TiTiler server localhost:8000 với AQI colormap
+        // Sử dụng TiTiler server với AQI colormap
         wmsLayer = L.tileLayer(
-          'http://localhost:8000/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi',
+          '${baseUrl}/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi',
           {
             maxZoom: 18,
             transparent: true,
@@ -173,12 +172,15 @@ const LEAFLET_HTML = `
 
 function MapWebViewInner({ onStationSelect, onReady }, ref) {
   const localRef = useRef(null);
+  
+  // Generate HTML with current BASE_URL
+  const leafletHTML = useMemo(() => generateLeafletHTML(BASE_URL), []);
 
   return (
     <WebView
       ref={ref || localRef}
       originWhitelist={['*']}
-      source={{ html: LEAFLET_HTML }}
+      source={{ html: leafletHTML }}
       style={{ flex: 1 }}
       onLoadEnd={onReady}
       onMessage={(event) => {

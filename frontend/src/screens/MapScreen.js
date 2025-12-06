@@ -14,10 +14,16 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { config } from '../../config';
-import AqiBar from '../components/ui/AqiBar';
+import { AqiBar } from '../components/ui';
 import { useLocationTracking } from '../hooks/useLocationTracking';
+import api, { BASE_URL } from '../services/api';
 import { fetchStationsWithLatestData } from '../services/cemApi';
-
+import {
+  createDayOptions,
+  getAQIColor,
+  getHealthAdvice
+} from '../utils';
+import { getAQICategory } from '../utils/aqiUtils';
 const CONTROL_HEIGHT = 40;
 const NOMINATIM_ENDPOINT = config.NOMINATIM_ENDPOINT + '/search';
 
@@ -25,76 +31,8 @@ const NOMINATIM_ENDPOINT = config.NOMINATIM_ENDPOINT + '/search';
 const API_BASE_URL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.web;
 const OPENMETEO_API_URL = config.OPENMETEO_API_URL;
 
-
-
-const healthAdvice = {
-  good: { text: 'Không khí tuyệt vời! Hãy tận hưởng các hoạt động ngoài trời.', action: 'Mở cửa sổ' },
-  moderate: { text: 'Chất lượng chấp nhận được. Nhóm nhạy cảm nên hạn chế vận động mạnh.', action: 'Theo dõi thêm' },
-  unhealthy: { text: 'Có hại cho sức khỏe. Nên đeo khẩu trang khi ra đường.', action: 'Đeo khẩu trang' },
-  veryUnhealthy: { text: 'Rất có hại. Hạn chế tối đa ra ngoài. Đóng kín cửa sổ.', action: 'Đóng cửa sổ' },
-  hazardous: { text: 'Nguy hại! Ở trong nhà và sử dụng máy lọc không khí ngay.', action: 'Dùng máy lọc khí' },
-};
-
-// const generateLocationDetails = (baseData) => {
-//   const aqi = baseData.aqi;
-//   let status = 'Tốt';
-//   let color = '#22c55e';
-//   let advice = healthAdvice.good;
-
-//   if (aqi > 50) { status = 'Trung bình'; color = '#eab308'; advice = healthAdvice.moderate; }
-//   if (aqi > 100) { status = 'Kém'; color = '#f97316'; advice = healthAdvice.unhealthy; }
-//   if (aqi > 150) { status = 'Xấu'; color = '#ef4444'; advice = healthAdvice.veryUnhealthy; }
-//   if (aqi > 200) { status = 'Nguy hại'; color = '#7f1d1d'; advice = healthAdvice.hazardous; }
-
-//   return {
-//     ...baseData,
-//     status,
-//     color,
-//     advice,
-//     temp: 28 + Math.floor(Math.random() * 5),
-//     humidity: 60 + Math.floor(Math.random() * 20),
-//   };
-// };
-
-// --- MOCK DATA - COMMENTED OUT, USING REAL DATA FROM CEM API ---
-// const stationDetailsById = baseStationMarkers
-//   .map((marker) => generateLocationDetails({ ...marker, aqi: marker.baseAqi }))
-//   .reduce((acc, item) => {
-//     acc[item.id] = item;
-//     return acc;
-//   }, {});
-
-// Sẽ được tạo từ cemStations trong component
-
-// Tạo danh sách 7 ngày từ hôm nay với label + ngày hiển thị + ISO date cho WMS
-const createDayOptions = () => {
-  const weekdays = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-  const result = [];
-  const today = new Date();
-
-  for (let offset = 0; offset < 7; offset++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + offset);
-    const dayName = weekdays[d.getDay()];
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const dateStr = `${day}/${month}`;
-    const isoDate = `${year}-${month}-${day}`; // YYYY-MM-DD cho PopGIS
-
-    let label;
-    if (offset === 0) label = 'Hôm nay';
-    else if (offset === 1) label = 'Ngày mai';
-    else label = dayName;
-
-    result.push({ label, dateStr, isoDate });
-  }
-
-  return result;
-};
-
 // HTML Leaflet map inline – giữ nguyên logic postMessage station_click
-const LEAFLET_HTML = `
+const generateLeafletHTML = (baseUrl) => `
 <!DOCTYPE html>
 <html lang="vi">
   <head>
@@ -130,6 +68,34 @@ const LEAFLET_HTML = `
   <body>
     <div id="map"></div>
     <script>
+      // Override console.log to send to React Native
+      const originalLog = console.log;
+      const originalError = console.error;
+      
+      console.log = function(...args) {
+        originalLog.apply(console, args);
+        try {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'console_log',
+              payload: args.map(a => String(a)).join(' ')
+            }));
+          }
+        } catch (e) {}
+      };
+      
+      console.error = function(...args) {
+        originalError.apply(console, args);
+        try {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'console_error',
+              payload: args.map(a => String(a)).join(' ')
+            }));
+          }
+        } catch (e) {}
+      };
+    
       const map = L.map('map', { zoomControl: false }).setView([21.0285, 105.8542], 11);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -148,12 +114,16 @@ const LEAFLET_HTML = `
         // Chuyển đổi date format nếu cần (YYYY-MM-DD -> YYYYMMDD)
         const dateParam = dateStr ? dateStr.replace(/-/g, '') : currentDate;
         
-        // Sử dụng TiTiler server với AQI colormap
-        // Dùng 10.0.2.2 cho Android emulator, localhost cho iOS/web
-        const serverUrl = 'http://10.0.2.2:8000';
+        // Sử dụng TiTiler server với AQI colormap từ BASE_URL
+        const serverUrl = \`${baseUrl}\`;
+        
+        const tileUrl = serverUrl + '/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi';
+        console.log('🗺️ Creating WMS layer with URL:', tileUrl.replace('{z}', '11').replace('{x}', '1626').replace('{y}', '901'));
+        console.log('📍 Server URL:', serverUrl);
+        console.log('📅 Date param:', dateParam);
         
         wmsLayer = L.tileLayer(
-          serverUrl + '/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi',
+          tileUrl,
           {
             maxZoom: 18,
             transparent: true,
@@ -162,6 +132,15 @@ const LEAFLET_HTML = `
             crossOrigin: true
           }
         );
+        
+        wmsLayer.on('tileerror', function(error) {
+          console.error('❌ Tile load error:', error.tile.src);
+        });
+        
+        wmsLayer.on('tileload', function(event) {
+          console.log('✅ Tile loaded successfully:', event.tile.src);
+        });
+        
         wmsLayer.addTo(map);
       }
       createWmsLayer();
@@ -332,9 +311,17 @@ const LEAFLET_HTML = `
           stationMarkers.forEach(marker => map.removeLayer(marker));
           stationMarkers = [];
 
-          // Thêm markers mới
+          // Thêm markers mới - chỉ cho stations có AQI data
           newStations.forEach((s) => {
-            const color = getAqiColor(s.aqi || s.baseAqi || 0);
+            const aqi = s.aqi || s.baseAqi;
+            
+            // Bỏ qua stations không có data hoặc data = 0
+            if (!aqi || aqi === 0) {
+              console.log('Skipping station without data:', s.name);
+              return;
+            }
+            
+            const color = getAqiColor(aqi);
             const iconHtml =
               '<div style="' +
               'width:28px;height:28px;border-radius:999px;' +
@@ -343,7 +330,7 @@ const LEAFLET_HTML = `
               'border:2px solid white;' +
               'box-shadow:0 2px 8px rgba(0,0,0,0.3);' +
               'font-size:10px;font-weight:600;color:#fff;">' +
-              (s.aqi || s.baseAqi || '?') +
+              aqi +
               '</div>';
 
             const icon = L.divIcon({
@@ -365,7 +352,7 @@ const LEAFLET_HTML = `
                   window.ReactNativeWebView.postMessage(
                     JSON.stringify({
                       type: 'station_click',
-                      payload: { ...s, status: getStatusText(s.aqi || s.baseAqi || 0) }
+                      payload: { ...s, status: getStatusText(aqi) }
                     })
                   );
                 }
@@ -378,7 +365,7 @@ const LEAFLET_HTML = `
             stationMarkers.push(marker);
           });
 
-          console.log('Updated stations:', newStations.length);
+          console.log('Updated stations:', stationMarkers.length, 'out of', newStations.length, 'total');
         } catch (e) {
           console.error('updateStations error', e);
         }
@@ -499,118 +486,42 @@ export default function MapScreen() {
     loadStations();
   }, []); // Chỉ chạy một lần khi mount
 
-  // Lưu vị trí khi user xem detail của một station
+  // Lưu vị trí GPS của người dùng khi xem detail vị trí GPS
   useEffect(() => {
-    if (selectedStation && selectedStation.lat && selectedStation.lng) {
-      const saveStationLocation = async () => {
+    // Chỉ lưu nếu là vị trí GPS thực của user (id === 'user-gps-location')
+    if (selectedStation && selectedStation.id === 'user-gps-location' && selectedStation.lat && selectedStation.lng) {
+      const saveUserLocation = async () => {
         try {
-          console.log('[MapScreen] Saving location when viewing station detail:', selectedStation.name);
+          console.log('[MapScreen] Saving user GPS location:', selectedStation.name);
           await saveCurrentLocation({
             aqi: selectedStation.aqi || selectedStation.baseAqi,
-            address: selectedStation.name || 'Trạm quan trắc',
+            address: selectedStation.address || selectedStation.name || 'Vị trí của bạn',
           });
-          console.log('[MapScreen] Station location saved successfully');
+          console.log('[MapScreen] User GPS location saved successfully');
         } catch (error) {
-          console.warn('[MapScreen] Failed to save station location:', error);
+          console.warn('[MapScreen] Failed to save user GPS location:', error);
         }
       };
       
-      // Delay một chút để user thực sự xem detail (không phải chỉ click qua)
-      const timer = setTimeout(saveStationLocation, 2000);
+      // Delay một chút để user thực sự xem detail
+      const timer = setTimeout(saveUserLocation, 2000);
       return () => clearTimeout(timer);
     }
   }, [selectedStation]);
 
-  // Helper function to get AQI color
-  const getAqiColor = (aqi) => {
-    if (!aqi) return '#9ca3af';
-    if (aqi <= 50) return '#22c55e';
-    if (aqi <= 100) return '#eab308';
-    if (aqi <= 150) return '#f97316';
-    if (aqi <= 200) return '#ef4444';
-    if (aqi <= 300) return '#991b1b';
-    return '#7f1d1d';
-  };
-
-  // Helper function to get AQI status
-  const getAqiStatus = (aqi) => {
-    if (!aqi) return 'Không rõ';
-    if (aqi <= 50) return 'Tốt';
-    if (aqi <= 100) return 'Trung bình';
-    if (aqi <= 150) return 'Kém';
-    if (aqi <= 200) return 'Xấu';
-    if (aqi <= 300) return 'Rất xấu';
-    return 'Nguy hại';
-  };
-
-  // Helper function to get health advice
-  const getHealthAdvice = (aqi) => {
-    if (!aqi) return healthAdvice.good;
-    if (aqi <= 50) return healthAdvice.good;
-    if (aqi <= 100) return healthAdvice.moderate;
-    if (aqi <= 150) return healthAdvice.unhealthy;
-    if (aqi <= 200) return healthAdvice.veryUnhealthy;
-    return healthAdvice.hazardous;
-  };
-
-  // Fetch PM2.5 and AQI data from backend with fallback URLs
-  const fetchPM25Data = async (lat, lon, date) => {
-    const dateParam = date ? date.replace(/-/g, '') : '';
-    const endpoint = `/pm25/point?lon=${lon}&lat=${lat}${dateParam ? `&date=${dateParam}` : ''}`;
-    
-    // Try multiple URLs for Android emulator compatibility
-    const urlsToTry = Platform.OS === 'android' 
-      ? [
-          `http://10.0.2.2:8000${endpoint}`,
-          `http://localhost:8000${endpoint}`,
-          `http://127.0.0.1:8000${endpoint}`,
-        ]
-      : [`${API_BASE_URL}${endpoint}`];
-    
-    for (const url of urlsToTry) {
-      try {
-        console.log('Trying PM2.5 from:', url);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-        
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          console.warn(`PM2.5 API error from ${url}: ${response.status}`);
-          continue; // Try next URL
-        }
-        
-        const data = await response.json();
-        console.log('✅ PM2.5 data received from:', url);
-        return data;
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          console.warn(`⏱️ Timeout connecting to ${url}`);
-        } else {
-          console.warn(`❌ Failed to fetch from ${url}:`, error.message);
-        }
-        // Continue to next URL
-      }
+  // Fetch PM2.5 and AQI data from backend using api service
+  const fetchPM25DataFromBackend = async (lat, lon, date) => {
+    try {
+      const data = await api.getPM25Point(lat, lon, date);
+      return data;
+    } catch (error) {
+      console.warn('❌ Backend PM2.5 fetch failed:', error.message);
+      console.warn('💡 Solutions:');
+      console.warn('1. Make sure server is running: cd server && python run.py');
+      console.warn('2. Check server binds to 0.0.0.0:8000 (not 127.0.0.1)');
+      console.warn('3. Try accessing http://localhost:8000/health in browser');
+      return null;
     }
-    
-    // All URLs failed
-    console.error('❌ All backend URLs failed');
-    console.error('Tried URLs:', urlsToTry);
-    console.warn('💡 Solutions:');
-    console.warn('1. Make sure server is running: cd server && python run.py');
-    console.warn('2. Check server binds to 0.0.0.0:8000 (not 127.0.0.1)');
-    console.warn('3. Try accessing http://localhost:8000/health in browser');
-    return null;
   };
 
   // Fetch weather data from Open-Meteo API (free, no API key required)
@@ -686,17 +597,51 @@ export default function MapScreen() {
   // Handle map click to fetch data from APIs
   const handleMapClick = async (lat, lon) => {
     try {
+      // Validate coordinates before making API calls
+      const validLat = parseFloat(lat);
+      const validLon = parseFloat(lon);
+      
+      if (isNaN(validLat) || isNaN(validLon)) {
+        console.warn('⚠️ Invalid coordinates:', { lat, lon });
+        Alert.alert('Lỗi', 'Tọa độ không hợp lệ');
+        return;
+      }
+      
+      if (validLat < -90 || validLat > 90 || validLon < -180 || validLon > 180) {
+        console.warn('⚠️ Coordinates out of range:', { lat: validLat, lon: validLon });
+        Alert.alert('Lỗi', 'Tọa độ nằm ngoài phạm vi cho phép');
+        return;
+      }
+      
       setLoadingPointData(true);
       
       // Lưu tọa độ để có thể re-fetch khi đổi ngày
-      setLastClickedPoint({ lat, lon });
+      setLastClickedPoint({ lat: validLat, lon: validLon });
       
-      // Fetch all data in parallel
-      const [pm25Data, weatherData, locationData] = await Promise.all([
-        fetchPM25Data(lat, lon, selectedDay?.isoDate),
-        fetchWeatherData(lat, lon),
-        reverseGeocode(lat, lon),
+      // Use Promise.allSettled instead of Promise.all to handle individual failures gracefully
+      const results = await Promise.allSettled([
+        fetchPM25DataFromBackend(validLat, validLon, selectedDay?.isoDate),
+        fetchWeatherData(validLat, validLon),
+        reverseGeocode(validLat, validLon),
       ]);
+      
+      // Extract data from settled promises with fallback values
+      const pm25Data = results[0].status === 'fulfilled' ? results[0].value : null;
+      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0 };
+      const locationData = results[2].status === 'fulfilled' ? results[2].value : { 
+        name: 'Điểm được chọn', 
+        address: `${validLat.toFixed(4)}, ${validLon.toFixed(4)}`, 
+        district: '', 
+        city: '' 
+      };
+      
+      // Log any failures for debugging
+      const apiNames = ['fetchPM25Data', 'fetchWeatherData', 'reverseGeocode'];
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.warn(`⚠️ ${apiNames[index]} failed:`, result.reason?.message || result.reason);
+        }
+      });
 
       // Check if backend server is not available (but still show weather data if available)
       if (!pm25Data) {
@@ -709,25 +654,25 @@ export default function MapScreen() {
         );
       }
 
-      // Construct station-like object
+      // Construct station-like object (KHÔNG lưu vị trí này vào location history)
       const pointData = {
-        id: 'custom-point',
-        lat,
-        lon, // Đổi từ lng sang lon để consistent với DetailStationScreen
-        lng: lon, // Giữ lng để backward compatible
+        id: 'custom-point', // ID khác 'user-gps-location' nên KHÔNG được lưu
+        lat: validLat,
+        lon: validLon, // Đổi từ lng sang lon để consistent với DetailStationScreen
+        lng: validLon, // Giữ lng để backward compatible
         name: locationData.name,
         address: locationData.address,
         district: locationData.district,
         city: locationData.city,
         aqi: pm25Data?.aqi || null,
         pm25: pm25Data?.pm25 || null,
-        status: pm25Data?.aqi ? getAqiStatus(pm25Data.aqi) : 'Không có dữ liệu',
-        color: pm25Data?.aqi ? getAqiColor(pm25Data.aqi) : '#9ca3af',
+        status: pm25Data?.aqi ? getAQICategory(pm25Data.aqi) : 'Không có dữ liệu',
+        color: pm25Data?.aqi ? getAQIColor(pm25Data.aqi) : '#9ca3af',
         temp: weatherData.temp,
         humidity: weatherData.humidity,
         windSpeed: weatherData.windSpeed,
         weatherCode: weatherData.weatherCode,
-        advice: pm25Data?.aqi ? getHealthAdvice(pm25Data.aqi) : healthAdvice.good,
+        advice: getHealthAdvice(pm25Data?.aqi),
         category: pm25Data?.category || null,
       };
 
@@ -747,8 +692,8 @@ export default function MapScreen() {
       map[station.id] = {
         ...station,
         aqi,
-        status: getAqiStatus(aqi),
-        color: getAqiColor(aqi),
+        status: getAQICategory(aqi),
+        color: getAQIColor(aqi),
         advice: getHealthAdvice(aqi),
       };
     });
@@ -759,8 +704,8 @@ export default function MapScreen() {
   const selectedStationDetail = useMemo(() => {
     if (!selectedStation) return null;
     
-    // If it's a custom point from map click, return as-is
-    if (selectedStation.id === 'custom-point') {
+    // If it's a custom point from map click or user GPS location, return as-is
+    if (selectedStation.id === 'custom-point' || selectedStation.id === 'user-gps-location') {
       return selectedStation;
     }
     
@@ -787,6 +732,11 @@ export default function MapScreen() {
       setLocating(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
+        Alert.alert(
+          'Quyền truy cập vị trí',
+          'Ứng dụng cần quyền truy cập vị trí để hiển thị vị trí của bạn trên bản đồ.',
+          [{ text: 'OK' }]
+        );
         setLocating(false);
         return;
       }
@@ -794,16 +744,96 @@ export default function MapScreen() {
         accuracy: Location.Accuracy.High,
       });
       const { latitude, longitude } = pos.coords;
-      if (webviewRef.current && latitude && longitude) {
+      
+      // Validate GPS coordinates
+      const validLat = parseFloat(latitude);
+      const validLon = parseFloat(longitude);
+      
+      if (isNaN(validLat) || isNaN(validLon)) {
+        console.warn('⚠️ Invalid GPS coordinates:', { latitude, longitude });
+        Alert.alert('Lỗi', 'Tọa độ GPS không hợp lệ');
+        setLocating(false);
+        return;
+      }
+      
+      if (validLat < -90 || validLat > 90 || validLon < -180 || validLon > 180) {
+        console.warn('⚠️ GPS coordinates out of range:', { lat: validLat, lon: validLon });
+        Alert.alert('Lỗi', 'Tọa độ GPS nằm ngoài phạm vi cho phép');
+        setLocating(false);
+        return;
+      }
+      
+      // Di chuyển bản đồ đến vị trí GPS
+      if (webviewRef.current) {
         const js = `
-          window.__setExternalLocation && window.__setExternalLocation(${latitude}, ${longitude});
+          window.__setExternalLocation && window.__setExternalLocation(${validLat}, ${validLon});
           true;
         `;
         webviewRef.current.injectJavaScript(js);
       }
+      
+      // Fetch dữ liệu PM2.5 và hiển thị popup cho vị trí GPS của user
+      setLoadingPointData(true);
+      
+      // Use Promise.allSettled to handle individual failures gracefully
+      const results = await Promise.allSettled([
+        fetchPM25DataFromBackend(validLat, validLon, selectedDay?.isoDate),
+        fetchWeatherData(validLat, validLon),
+        reverseGeocode(validLat, validLon),
+      ]);
+      
+      // Extract data from settled promises with fallback values
+      const pm25Data = results[0].status === 'fulfilled' ? results[0].value : null;
+      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0 };
+      const locationData = results[2].status === 'fulfilled' ? results[2].value : { 
+        name: 'Vị trí của bạn', 
+        address: `${validLat.toFixed(4)}, ${validLon.toFixed(4)}`, 
+        district: '', 
+        city: '' 
+      };
+      
+      // Log any failures for debugging
+      const apiNames = ['fetchPM25DataFromBackend', 'fetchWeatherData', 'reverseGeocode'];
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.warn(`⚠️ GPS location ${apiNames[index]} failed:`, result.reason?.message || result.reason);
+        }
+      });
+      
+      // Construct user GPS location object
+      const userGpsLocation = {
+        id: 'user-gps-location', // ID đặc biệt để nhận diện vị trí GPS của user
+        lat: validLat,
+        lon: validLon,
+        lng: validLon,
+        name: 'Vị trí của bạn',
+        address: locationData.address,
+        district: locationData.district,
+        city: locationData.city,
+        aqi: pm25Data?.aqi || null,
+        pm25: pm25Data?.pm25 || null,
+        status: pm25Data?.aqi ? getAQICategory(pm25Data.aqi) : 'Không có dữ liệu',
+        color: pm25Data?.aqi ? getAQIColor(pm25Data.aqi) : '#9ca3af',
+        temp: weatherData.temp,
+        humidity: weatherData.humidity,
+        windSpeed: weatherData.windSpeed,
+        weatherCode: weatherData.weatherCode,
+        advice: getHealthAdvice(pm25Data?.aqi),
+        category: pm25Data?.category || null,
+      };
+      
+      // Hiển thị popup thông tin vị trí GPS
+      setSelectedStation(userGpsLocation);
+      setLoadingPointData(false);
+      
     } catch (e) {
-      // Có thể log ra console trong dev, nhưng không làm crash app
       console.warn('GPS error', e);
+      Alert.alert(
+        'Lỗi GPS',
+        'Không thể lấy vị trí hiện tại. Vui lòng kiểm tra GPS và thử lại.',
+        [{ text: 'OK' }]
+      );
+      setLoadingPointData(false);
     } finally {
       setLocating(false);
     }
@@ -955,14 +985,23 @@ export default function MapScreen() {
     }
   }, [showHeatmap, webviewReady]);
 
+  // Generate HTML with BASE_URL
+  const leafletHTML = useMemo(() => generateLeafletHTML(BASE_URL), []);
+
   return (
     <View style={styles.container}>
       {/* WebView hiển thị Leaflet map (WebView thuần, giống bản đầu) */}
       <WebView
         ref={webviewRef}
         originWhitelist={['*']}
-        source={{ html: LEAFLET_HTML }}
+        source={{ html: leafletHTML }}
         style={styles.webview}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo={false}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        mixedContentMode="always"
         onLoad={() => {
           console.log('✅ WebView loaded, map ready');
           setWebviewReady(true);
@@ -976,6 +1015,10 @@ export default function MapScreen() {
               // Handle map click - fetch data from backend
               const { lat, lng } = data.payload;
               handleMapClick(lat, lng);
+            } else if (data.type === 'console_log') {
+              console.log('[WebView]', data.payload);
+            } else if (data.type === 'console_error') {
+              console.error('[WebView]', data.payload);
             }
           } catch (e) {
             // ignore parse errors
@@ -1466,8 +1509,9 @@ const styles = StyleSheet.create({
 },
   layerControls: {
     position: 'absolute',
-    width: '45%',
-    left: '27.5%',  
+    width: '50%',
+    left: '24.5%',  
+    right: '33.5%',
     bottom: 60,
     zIndex: 10,
     backgroundColor: '#ffffff',
