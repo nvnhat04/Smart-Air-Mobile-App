@@ -2,7 +2,11 @@ import { Feather } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocationTracking } from '../hooks/useLocationTracking';
-import api from '../services/api';
+import {
+  getAQIColor,
+  getExposureMultiplier,
+  processLocationHistory as processHistory
+} from '../utils';
 
 const generateAnalyticsData = () => {
   const locations = [
@@ -48,7 +52,7 @@ const generateAnalyticsData = () => {
     type: 'present',
   });
 
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i < 7; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(
@@ -78,268 +82,6 @@ const generateAnalyticsData = () => {
   return analyticsData;
 };
 
-const getAQIColor = (aqi) => {
-  if (aqi <= 50) return '#22c55e';
-  if (aqi <= 100) return '#eab308';
-  if (aqi <= 150) return '#f97316';
-  if (aqi <= 200) return '#ef4444';
-  return '#7f1d1d';
-};
-
-// Hàm tạo dữ liệu từ lịch sử thực + dự báo từ API PM2.5
-const processLocationHistory = async (historyData) => {
-  const today = new Date();
-  const analyticsData = [];
-  
-  // Group history by date
-  const historyByDate = {};
-  // Track location frequency and coordinates for forecast
-  const locationFrequency = {};
-  const locationCoords = {}; // Store lat/lon for each location
-  
-
-  historyData.forEach(record => {
-    const recordDate = new Date(record.timestamp);
-    const dateKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}-${String(recordDate.getDate()).padStart(2, '0')}`;
-    
-    if (!historyByDate[dateKey]) {
-      historyByDate[dateKey] = [];
-    }
-    historyByDate[dateKey].push(record);
-    
-    // Count location frequency and store coordinates
-    const address = record.address || 'Unknown';
-    locationFrequency[address] = (locationFrequency[address] || 0) + 1;
-    if (!locationCoords[address] && record.latitude && record.longitude) {
-      locationCoords[address] = { lat: record.latitude, lon: record.longitude };
-    }
-  });
-  
-  // Find most visited locations
-  const sortedLocations = Object.entries(locationFrequency)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([addr]) => addr);
-  
-  console.log('[processLocationHistory] Most visited locations:', sortedLocations);
-
-  // Tạo data cho 6 ngày qua
-  for (let i = -6; i < 0; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    
-    const dayRecords = historyByDate[dateKey] || [];
-    let aqi, location, lat, lon;
-    
-    if (dayRecords.length > 0) {
-      // Tính AQI trung bình trong ngày
-      const totalAqi = dayRecords.reduce((sum, r) => sum + (r.aqi || 0), 0);
-      aqi = Math.round(totalAqi / dayRecords.length);
-      // Lấy địa điểm có AQI cao nhất
-      const maxRecord = dayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, dayRecords[0]);
-      location = maxRecord.address || 'Vị trí không xác định';
-      lat = maxRecord.latitude;
-      lon = maxRecord.longitude;
-    } else {
-      // Không có data thực, dùng mock
-      aqi = 30 + Math.floor(Math.random() * 90);
-      location = 'Chưa có dữ liệu';
-      lat = null;
-      lon = null;
-    }
-
-    analyticsData.push({
-      key: i.toString(),
-      date: dateStr,
-      aqi,
-      location,
-      latitude: lat,
-      longitude: lon,
-      type: 'past',
-    });
-  }
-
-  // Hôm nay
-  const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const todayRecords = historyByDate[todayKey] || [];
-  
-  let todayAqi, todayLocation, todayLat, todayLon;
-  if (todayRecords.length > 0) {
-    const maxRecord = todayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, todayRecords[0]);
-    todayAqi = maxRecord.aqi || 75;
-    todayLocation = maxRecord.address || 'Vị trí hiện tại';
-    todayLat = maxRecord.latitude;
-    todayLon = maxRecord.longitude;
-  } else {
-    todayAqi = 75;
-    todayLocation = 'Vị trí hiện tại';
-    todayLat = null;
-    todayLon = null;
-  }
-
-  analyticsData.push({
-    key: '0',
-    date: todayStr,
-    aqi: todayAqi,
-    location: todayLocation,
-    latitude: todayLat,
-    longitude: todayLon,
-    type: 'present',
-  });
-
-  // Dự báo 6 ngày tới - Gọi API PM2.5 forecast cho các vị trí đã lưu
-  // Ngày +1 dự báo tại vị trí của ngày -6, +2 tại -5, +3 tại -4, +4 tại -3, +5 tại -2, +6 tại -1
-  const forecastPromises = [];
-  const forecastLocationMap = {}; // Map ngày → vị trí
-  
-  for (let i = 1; i <= 6; i++) {
-    // Lấy data từ ngày đối xứng trong quá khứ (ngày -(7-i))
-    const mirrorDate = new Date(today);
-    mirrorDate.setDate(today.getDate() - (7 - i));
-    const mirrorDateKey = `${mirrorDate.getFullYear()}-${String(mirrorDate.getMonth() + 1).padStart(2, '0')}-${String(mirrorDate.getDate()).padStart(2, '0')}`;
-    
-    const mirrorDayRecords = historyByDate[mirrorDateKey] || [];
-    
-    if (mirrorDayRecords.length > 0) {
-      // Lấy vị trí chính trong ngày đối xứng
-      const primaryRecord = mirrorDayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, mirrorDayRecords[0]);
-      const primaryLocation = primaryRecord.address;
-      const coords = locationCoords[primaryLocation];
-      
-      if (coords) {
-        forecastLocationMap[i] = { location: primaryLocation, coords };
-        // Gọi API PM2.5 forecast
-        forecastPromises.push(
-          api.getPM25Forecast(coords.lat, coords.lon, 7)
-            .then(data => ({ day: i, data, location: primaryLocation }))
-            .catch(err => {
-              console.error(`[Forecast Day +${i}] API error:`, err);
-              return { day: i, data: null, location: primaryLocation };
-            })
-        );
-      }
-    }
-  }
-  
-  // Đợi tất cả API calls
-  const forecastResults = await Promise.all(forecastPromises);
-  const forecastDataMap = {};
-  forecastResults.forEach(result => {
-    if (result.data && result.data.forecast) {
-      forecastDataMap[result.day] = result.data;
-    }
-  });
-  
-  // Tạo dự báo 7 ngày với data từ API
-  for (let i = 1; i <= 7; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-    const mirrorDate = new Date(today);
-    mirrorDate.setDate(today.getDate() - i);
-    const mirrorDateKey = `${mirrorDate.getFullYear()}-${String(mirrorDate.getMonth() + 1).padStart(2, '0')}-${String(mirrorDate.getDate()).padStart(2, '0')}`;
-    const mirrorDateStr = `${String(mirrorDate.getDate()).padStart(2, '0')}/${String(mirrorDate.getMonth() + 1).padStart(2, '0')}`;
-    
-    let aqi, location;
-    const forecastData = forecastDataMap[i];
-    const locationInfo = forecastLocationMap[i];
-    
-    if (forecastData && forecastData.forecast && forecastData.forecast.length > 0) {
-      // Sử dụng data từ API PM2.5 forecast
-      const dayForecast = forecastData.forecast[i - 1]; // Index 0 = ngày đầu tiên
-      aqi = dayForecast?.aqi || 75;
-      location = locationInfo?.location || 'Dự báo';
-      
-      const addressParts = location.split(',');
-      const shortLocation = addressParts[addressParts.length - 2]?.trim() || addressParts[0] || 'Dự báo';
-      
-      console.log(`[Forecast Day +${i}] API PM2.5: ${dayForecast?.pm25}, AQI: ${aqi}, Location: ${shortLocation}`);
-      
-      const coords = locationInfo?.coords;
-      analyticsData.push({
-        key: `+${i}`,
-        date: dateStr,
-        aqi: Math.max(0, Math.min(500, aqi)),
-        location: `Dự báo: ${shortLocation}`,
-        latitude: coords?.lat || null,
-        longitude: coords?.lon || null,
-        type: 'future',
-        note: `Dự báo PM2.5 tại ${shortLocation}`,
-      });
-    } else {
-      // Fallback: tính toán local nếu API fail
-      const mirrorDayRecords = historyByDate[mirrorDateKey] || [];
-      
-      if (mirrorDayRecords.length > 0) {
-        const primaryRecord = mirrorDayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, mirrorDayRecords[0]);
-        const primaryLocation = primaryRecord.address;
-        const locationRecords = historyData.filter(r => r.address === primaryLocation);
-        
-        if (locationRecords.length > 0) {
-          const avgPm25 = locationRecords.reduce((sum, r) => sum + (r.pm25 || 0), 0) / locationRecords.length;
-          const forecastPm25 = avgPm25 + (Math.random() * 8 - 4);
-          
-          if (forecastPm25 <= 12) aqi = Math.round((forecastPm25 / 12) * 50);
-          else if (forecastPm25 <= 35.4) aqi = Math.round(((forecastPm25 - 12) / (35.4 - 12)) * 50 + 50);
-          else if (forecastPm25 <= 55.4) aqi = Math.round(((forecastPm25 - 35.4) / (55.4 - 35.4)) * 50 + 100);
-          else if (forecastPm25 <= 150.4) aqi = Math.round(((forecastPm25 - 55.4) / (150.4 - 55.4)) * 50 + 150);
-          else aqi = Math.round(((forecastPm25 - 150.4) / (250.4 - 150.4)) * 50 + 200);
-        } else {
-          aqi = Math.round(primaryRecord.aqi + (Math.random() * 15 - 7.5));
-        }
-        
-        const addressParts = (primaryLocation || '').split(',');
-        location = addressParts[addressParts.length - 2]?.trim() || addressParts[0] || 'Dự báo';
-      } else {
-        // No history data
-        const fallbackLocation = sortedLocations[0];
-        if (fallbackLocation) {
-          const coords = locationCoords[fallbackLocation];
-          if (coords) {
-            aqi = 75 + Math.floor(Math.random() * 50);
-          } else {
-            aqi = 75 + Math.floor(Math.random() * 50);
-          }
-          const parts = fallbackLocation.split(',');
-          location = parts[parts.length - 2]?.trim() || parts[0] || 'Dự báo';
-        } else {
-          aqi = 75 + Math.floor(Math.random() * 50);
-          location = 'Dự báo';
-        }
-      }
-
-      // Lấy coordinates từ primary record hoặc fallback location
-      let fallbackLat = null, fallbackLon = null;
-      if (mirrorDayRecords.length > 0) {
-        const primaryRecord = mirrorDayRecords.reduce((max, r) => (r.aqi || 0) > (max.aqi || 0) ? r : max, mirrorDayRecords[0]);
-        fallbackLat = primaryRecord.latitude;
-        fallbackLon = primaryRecord.longitude;
-      } else if (sortedLocations[0] && locationCoords[sortedLocations[0]]) {
-        const coords = locationCoords[sortedLocations[0]];
-        fallbackLat = coords.lat;
-        fallbackLon = coords.lon;
-      }
-
-      analyticsData.push({
-        key: `+${i}`,
-        date: dateStr,
-        aqi: Math.max(0, Math.min(500, aqi)),
-        location: `Dự báo: ${location}`,
-        latitude: fallbackLat,
-        longitude: fallbackLon,
-        type: 'future',
-        note: mirrorDayRecords.length > 0 ? `Dựa trên dữ liệu ngày ${mirrorDateStr}` : `Dự báo cho ${location}`,
-      });
-    }
-  }
-
-  return analyticsData;
-};
-
 export default function AnalyticExposureScreen() {
   const { getLocationHistory } = useLocationTracking(true);
   const [historyData, setHistoryData] = useState([]);
@@ -348,6 +90,11 @@ export default function AnalyticExposureScreen() {
   const [selectedRadius, setSelectedRadius] = useState(100);
   const [showRadiusMenu, setShowRadiusMenu] = useState(false);
   const [analyticsData, setAnalyticsData] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'history', 'escape'
+  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'last3days', 'last7days'
+  const [exposureMode, setExposureMode] = useState('outdoor'); // 'outdoor', 'indoor', 'indoor_purifier'
+  const [showExposureMenu, setShowExposureMenu] = useState(false);
+  const [userLocation, setUserLocation] = useState(null); // Vị trí thực của user từ GPS/history
   
   // Load location history khi component mount (7 ngày)
   useEffect(() => {
@@ -358,8 +105,21 @@ export default function AnalyticExposureScreen() {
         setHistoryData(history);
         console.log('[AnalyticExposureScreen] Loaded 7-day history:', history.length, 'records');
         
+        // Lấy vị trí gần nhất của user từ history
+        if (history.length > 0) {
+          const latestLocation = history[0]; // History đã sorted theo timestamp giảm dần
+          setUserLocation({
+            name: latestLocation.address || 'Vị trí của bạn',
+            address: latestLocation.address,
+            aqi: latestLocation.aqi,
+            latitude: latestLocation.latitude,
+            longitude: latestLocation.longitude,
+          });
+          console.log('[AnalyticExposureScreen] User location set from history:', latestLocation.address);
+        }
+        
         // Process history với API PM2.5 forecast
-        const processed = await processLocationHistory(history);
+        const processed = await processHistory(history);
         setAnalyticsData(processed);
       } catch (error) {
         console.error('[AnalyticExposureScreen] Failed to load history:', error);
@@ -396,6 +156,32 @@ export default function AnalyticExposureScreen() {
     [allDestinations, selectedRadius],
   );
 
+  // Filter history data theo ngày (PHẢI ĐẶT TRƯỚC if/return để tuân thủ Rules of Hooks)
+  const filteredHistoryData = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    return historyData.filter(item => {
+      const itemDate = new Date(item.timestamp);
+      
+      switch (dateFilter) {
+        case 'today':
+          return itemDate >= today;
+        case 'last3days':
+          const threeDaysAgo = new Date(today);
+          threeDaysAgo.setDate(today.getDate() - 3);
+          return itemDate >= threeDaysAgo;
+        case 'last7days':
+          const sevenDaysAgo = new Date(today);
+          sevenDaysAgo.setDate(today.getDate() - 7);
+          return itemDate >= sevenDaysAgo;
+        case 'all':
+        default:
+          return true;
+      }
+    });
+  }, [historyData, dateFilter]);
+
   // Show loading state
   if (loading) {
     return (
@@ -408,14 +194,21 @@ export default function AnalyticExposureScreen() {
 
   const selectedData = analyticsData[selectedIdx];
 
-  const pastSlice = analyticsData.slice(0, 8);
-  const futureSlice = analyticsData.slice(8);
-  const pastAvg = Math.round(
-    pastSlice.reduce((sum, d) => sum + d.aqi, 0) / Math.max(pastSlice.length, 1),
-  );
-  const futureAvg = Math.round(
-    futureSlice.reduce((sum, d) => sum + d.aqi, 0) / Math.max(futureSlice.length, 1),
-  );
+  // Hàm tính hệ số phơi nhiễm
+  const exposureMultiplier = getExposureMultiplier(exposureMode);
+
+  // Phân chia dựa trên type (past/present/future) thay vì index cố định
+  const pastSlice = analyticsData.filter(d => d.type === 'past');
+  const presentSlice = analyticsData.filter(d => d.type === 'present');
+  const futureSlice = analyticsData.filter(d => d.type === 'future');
+  
+  // Tính trung bình chỉ cho các ngày có data và áp dụng hệ số phơi nhiễm
+  const pastAvg = pastSlice.length > 0 
+    ? Math.round(pastSlice.reduce((sum, d) => sum + d.aqi, 0) / pastSlice.length * exposureMultiplier)
+    : 0;
+  const futureAvg = futureSlice.length > 0
+    ? Math.round(futureSlice.reduce((sum, d) => sum + d.aqi, 0) / futureSlice.length * exposureMultiplier)
+    : 0;
   const diff = futureAvg - pastAvg;
 
   const pastPm25Avg = (pastAvg * 0.6).toFixed(1);
@@ -423,13 +216,8 @@ export default function AnalyticExposureScreen() {
   const cigPast = (pastPm25Avg / 22).toFixed(1);
   const cigFuture = (futurePm25Avg / 22).toFixed(1);
 
-  const maxAqi = Math.max(...analyticsData.map((d) => d.aqi), 10);
+  const maxAqi = Math.max(...analyticsData.map((d) => d.aqi * exposureMultiplier), 10);
 
-  // Mock data "trốn bụi đi chơi" giống Analytics.jsx
-  const userLocation = {
-    name: 'Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội',
-    aqi: 141,
-  };
   const radiusOptions = [50, 100, 150, 200];
 
   return (
@@ -443,8 +231,133 @@ export default function AnalyticExposureScreen() {
           <Text style={styles.headerTitle}>Lịch sử &amp; dự báo</Text>
           <Text style={styles.headerSubtitle}>Phân tích chất lượng không khí 13 ngày</Text>
         </View>
+        
+        {/* Compact Exposure Mode Dropdown */}
+        <View>
+          <TouchableOpacity
+            style={styles.exposureModeDropdown}
+            onPress={() => setShowExposureMenu(!showExposureMenu)}
+            activeOpacity={0.7}
+          >
+            <Feather 
+              name={exposureMode === 'outdoor' ? 'sun' : exposureMode === 'indoor' ? 'home' : 'wind'} 
+              size={14} 
+              color="#1d4ed8" 
+            />
+            <Text style={styles.exposureModeDropdownText}>
+              {exposureMode === 'outdoor' ? 'Ngoài trời' : 
+               exposureMode === 'indoor' ? 'Trong nhà' : 
+               'Có máy lọc'}
+            </Text>
+            <Feather 
+              name={showExposureMenu ? 'chevron-up' : 'chevron-down'} 
+              size={14} 
+              color="#64748b" 
+            />
+          </TouchableOpacity>
+          
+          {showExposureMenu && (
+            <View style={styles.exposureModeMenu}>
+              <TouchableOpacity
+                style={[styles.exposureModeMenuItem, exposureMode === 'outdoor' && styles.exposureModeMenuItemActive]}
+                onPress={() => {
+                  setExposureMode('outdoor');
+                  setShowExposureMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="sun" size={14} color={exposureMode === 'outdoor' ? '#1d4ed8' : '#64748b'} />
+                <Text style={[styles.exposureModeMenuText, exposureMode === 'outdoor' && styles.exposureModeMenuTextActive]}>
+                  Ngoài trời
+                </Text>
+                <Text style={styles.exposureModeMenuMultiplier}>1.0x</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.exposureModeMenuItem, exposureMode === 'indoor' && styles.exposureModeMenuItemActive]}
+                onPress={() => {
+                  setExposureMode('indoor');
+                  setShowExposureMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="home" size={14} color={exposureMode === 'indoor' ? '#1d4ed8' : '#64748b'} />
+                <Text style={[styles.exposureModeMenuText, exposureMode === 'indoor' && styles.exposureModeMenuTextActive]}>
+                  Trong nhà
+                </Text>
+                <Text style={styles.exposureModeMenuMultiplier}>0.5x</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.exposureModeMenuItem, exposureMode === 'indoor_purifier' && styles.exposureModeMenuItemActive]}
+                onPress={() => {
+                  setExposureMode('indoor_purifier');
+                  setShowExposureMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="wind" size={14} color={exposureMode === 'indoor_purifier' ? '#1d4ed8' : '#64748b'} />
+                <Text style={[styles.exposureModeMenuText, exposureMode === 'indoor_purifier' && styles.exposureModeMenuTextActive]}>
+                  Có máy lọc
+                </Text>
+                <Text style={styles.exposureModeMenuMultiplier}>0.1x</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
 
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
+          onPress={() => setActiveTab('overview')}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="bar-chart-2" 
+            size={16} 
+            color={activeTab === 'overview' ? '#1d4ed8' : '#64748b'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>
+            Tổng quan
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'history' && styles.tabActive]}
+          onPress={() => setActiveTab('history')}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="clock" 
+            size={16} 
+            color={activeTab === 'history' ? '#1d4ed8' : '#64748b'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
+            Lịch sử
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'escape' && styles.tabActive]}
+          onPress={() => setActiveTab('escape')}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="map" 
+            size={16} 
+            color={activeTab === 'escape' ? '#1d4ed8' : '#64748b'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'escape' && styles.tabTextActive]}>
+            Trốn bụi
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tab Content: Tổng quan */}
+      {activeTab === 'overview' && (
+        <>
       {/* Mini bar chart dạng thẻ */}
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
@@ -476,7 +389,8 @@ export default function AnalyticExposureScreen() {
 
             <View style={styles.barRow}>
               {analyticsData.map((item, idx) => {
-                const heightRatio = Math.min(item.aqi, 300) / 300; // Max AQI 300
+                const adjustedAqi = item.aqi * exposureMultiplier;
+                const heightRatio = Math.min(adjustedAqi, 300) / 300; // Max AQI 300
                 const barHeight = 120 * heightRatio + 5;
                 const isSelected = idx === selectedIdx;
                 const isToday = item.type === 'present';
@@ -497,7 +411,7 @@ export default function AnalyticExposureScreen() {
                         styles.bar,
                         {
                           height: barHeight,
-                          backgroundColor: getAQIColor(item.aqi),
+                          backgroundColor: getAQIColor(adjustedAqi),
                           opacity: isSelected ? 1 : 0.7,
                           borderWidth: isToday ? 2 : (isSelected ? 1.5 : 0),
                           borderColor: isToday ? '#2563eb' : '#0f172a',
@@ -549,10 +463,10 @@ export default function AnalyticExposureScreen() {
             <Text
               style={[
                 styles.selectedAqiValue,
-                { color: getAQIColor(selectedData.aqi) },
+                { color: getAQIColor(selectedData.aqi * exposureMultiplier) },
               ]}
             >
-              {selectedData.aqi}
+              {Math.round(selectedData.aqi * exposureMultiplier)}
             </Text>
             <Text style={styles.selectedAqiLabel}>AQI</Text>
           </View>
@@ -593,10 +507,6 @@ export default function AnalyticExposureScreen() {
             <Text style={styles.exposureCig}>
               ≈ hút <Text style={styles.exposureCigValue}>{cigPast}</Text> điếu thuốc
             </Text>
-
-            <View style={styles.exposureFooterPill}>
-              <Text style={styles.exposureFooterPillText}>📍 7 địa điểm đã ghé</Text>
-            </View>
           </View>
 
           {/* Future card */}
@@ -648,7 +558,12 @@ export default function AnalyticExposureScreen() {
           </Text>
         </View>
       </View>
+      </>
+      )}
 
+      {/* Tab Content: Trốn bụi */}
+      {activeTab === 'escape' && (
+        <View style={styles.escapeContainer}>
       {/* Trốn bụi cuối tuần */}
       <View style={styles.weekendSection}>
         {/* Header + nút chọn bán kính */}
@@ -701,20 +616,40 @@ export default function AnalyticExposureScreen() {
         </View>
 
         {/* Thẻ vị trí hiện tại */}
+        {userLocation ? (
         <View style={styles.weekendLocationCard}>
           <View>
             <Text style={styles.weekendLocationLabel}>Vị trí hiện tại</Text>
-            <Text style={styles.weekendLocationName}>{userLocation.name}</Text>
+            <Text style={styles.weekendLocationName}>{userLocation.name || userLocation.address}</Text>
           </View>
           <View style={styles.weekendLocationAqiBox}>
             <Text style={styles.weekendLocationAqiLabel}>AQI</Text>
-            <Text style={styles.weekendLocationAqiValue}>{userLocation.aqi}</Text>
+            <Text style={[
+              styles.weekendLocationAqiValue,
+              { color: getAQIColor(userLocation.aqi || 0) }
+            ]}>
+               {userLocation.aqi || 0}
+            </Text>
           </View>
         </View>
+        ) : (
+          <View style={styles.weekendLocationCard}>
+            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 16 }}>
+              <Feather name="map-pin" size={32} color="#cbd5e1" />
+              <Text style={{ fontSize: 14, color: '#64748b', marginTop: 8 }}>
+                Chưa có vị trí
+              </Text>
+              <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, textAlign: 'center' }}>
+                Nhấn nút GPS trên bản đồ để lưu vị trí của bạn
+              </Text>
+            </View>
+          </View>
+        )}
+      
 
         <Text style={styles.weekendSectionHeading}>Gợi ý hàng đầu</Text>
 
-        {filteredDestinations.map((dest) => {
+        {userLocation && filteredDestinations.map((dest) => {
           const cleanRatio = (userLocation.aqi / dest.aqi).toFixed(1);
           return (
             <View key={dest.id} style={styles.weekendCardOuter}>
@@ -758,6 +693,166 @@ export default function AnalyticExposureScreen() {
           );
         })}
       </View>
+        </View>
+      )}
+
+      {/* Tab Content: Lịch sử chi tiết */}
+      {activeTab === 'history' && (
+        <View style={styles.historyContainer}>
+          <View style={styles.historyHeader}>
+            <View style={styles.historyHeaderIcon}>
+              <Feather name="map-pin" size={18} color="#1d4ed8" />
+            </View>
+            <View style={styles.historyHeaderText}>
+              <Text style={styles.historyTitle}>Lịch sử vị trí đã lưu</Text>
+              <Text style={styles.historySubtitle}>
+                {filteredHistoryData.length} vị trí
+                {dateFilter === 'today' && ' • Hôm nay'}
+                {dateFilter === 'last3days' && ' • 3 ngày qua'}
+                {dateFilter === 'last7days' && ' • 7 ngày qua'}
+                {dateFilter === 'all' && ` • Tất cả (${historyData.length} tổng)`}
+              </Text>
+            </View>
+          </View>
+
+          {/* Date Filter */}
+          <View style={styles.filterContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'all' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('all')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterButtonText, dateFilter === 'all' && styles.filterButtonTextActive]}>
+                  Tất cả
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'today' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('today')}
+                activeOpacity={0.7}
+              >
+                <Feather 
+                  name="sun" 
+                  size={14} 
+                  color={dateFilter === 'today' ? '#1d4ed8' : '#64748b'} 
+                />
+                <Text style={[styles.filterButtonText, dateFilter === 'today' && styles.filterButtonTextActive]}>
+                  Hôm nay
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'last3days' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('last3days')}
+                activeOpacity={0.7}
+              >
+                <Feather 
+                  name="calendar" 
+                  size={14} 
+                  color={dateFilter === 'last3days' ? '#1d4ed8' : '#64748b'} 
+                />
+                <Text style={[styles.filterButtonText, dateFilter === 'last3days' && styles.filterButtonTextActive]}>
+                  3 ngày qua
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'last7days' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('last7days')}
+                activeOpacity={0.7}
+              >
+                <Feather 
+                  name="calendar" 
+                  size={14} 
+                  color={dateFilter === 'last7days' ? '#1d4ed8' : '#64748b'} 
+                />
+                <Text style={[styles.filterButtonText, dateFilter === 'last7days' && styles.filterButtonTextActive]}>
+                  7 ngày qua
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {filteredHistoryData.length === 0 ? (
+            <View style={styles.emptyHistory}>
+              <Feather name="map" size={48} color="#cbd5e1" />
+              <Text style={styles.emptyHistoryText}>
+                {historyData.length === 0 ? 'Chưa có lịch sử vị trí' : 'Không có dữ liệu'}
+              </Text>
+              <Text style={styles.emptyHistorySubtext}>
+                {historyData.length === 0 
+                  ? 'Nhấn nút GPS trên bản đồ để lưu vị trí hiện tại'
+                  : 'Thử chọn bộ lọc khác'}
+              </Text>
+            </View>
+          ) : (
+            filteredHistoryData.map((item, index) => {
+              const date = new Date(item.timestamp);
+              const dateStr = date.toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              });
+              const timeStr = date.toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              
+              return (
+                <View key={`${item.timestamp}-${index}`} style={styles.historyCard}>
+                  <View style={styles.historyCardHeader}>
+                    <View style={[styles.historyCardAqiBadge, { backgroundColor: getAQIColor(item.aqi || 0) }]}>
+                      <Text style={styles.historyCardAqiText}>{item.aqi || 0}</Text>
+                    </View>
+                    <View style={styles.historyCardHeaderText}>
+                      <Text style={styles.historyCardDate}>{dateStr}</Text>
+                      <Text style={styles.historyCardTime}>{timeStr}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.historyCardBody}>
+                    <View style={styles.historyCardRow}>
+                      <Feather name="map-pin" size={14} color="#64748b" />
+                      <Text style={styles.historyCardLocation} numberOfLines={2}>
+                        {item.address || 'Không có địa chỉ'}
+                      </Text>
+                    </View>
+                    
+                    {item.pm25 && (
+                      <View style={styles.historyCardRow}>
+                        <Feather name="wind" size={14} color="#64748b" />
+                        <Text style={styles.historyCardMeta}>
+                          PM2.5: {item.pm25.toFixed(1)} µg/m³
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {item.weather && (
+                      <View style={styles.historyCardRow}>
+                        <Feather name="cloud" size={14} color="#64748b" />
+                        <Text style={styles.historyCardMeta}>
+                          {item.weather.temp}°C • {item.weather.description}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {item.latitude && item.longitude && (
+                      <View style={styles.historyCardRow}>
+                        <Feather name="navigation" size={14} color="#64748b" />
+                        <Text style={styles.historyCardMeta}>
+                          {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -799,6 +894,239 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     marginTop: 2,
+  },
+  exposureModeDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+  },
+  exposureModeDropdownText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1d4ed8',
+  },
+  exposureModeMenu: {
+    position: 'absolute',
+    top: 36,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    minWidth: 160,
+    zIndex: 1000,
+  },
+  exposureModeMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  exposureModeMenuItemActive: {
+    backgroundColor: '#f0f9ff',
+  },
+  exposureModeMenuText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  exposureModeMenuTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '600',
+  },
+  exposureModeMenuMultiplier: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 6,
+  },
+  tabActive: {
+    backgroundColor: '#dbeafe',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  tabTextActive: {
+    color: '#1d4ed8',
+  },
+  escapeContainer: {
+    flex: 1,
+  },
+  historyContainer: {
+    flex: 1,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    gap: 12,
+  },
+  historyHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyHeaderText: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  historySubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  filterContainer: {
+    marginBottom: 16,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+  },
+  filterButtonActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#93c5fd',
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  filterButtonTextActive: {
+    color: '#1d4ed8',
+  },
+  emptyHistory: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 48,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyHistoryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+  },
+  emptyHistorySubtext: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  historyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  historyCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  historyCardAqiBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyCardAqiText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  historyCardHeaderText: {
+    flex: 1,
+  },
+  historyCardDate: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  historyCardTime: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  historyCardBody: {
+    gap: 8,
+  },
+  historyCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  historyCardLocation: {
+    flex: 1,
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  historyCardMeta: {
+    fontSize: 13,
+    color: '#64748b',
   },
   chartCard: {
     backgroundColor: '#ffffff',
@@ -846,6 +1174,7 @@ const styles = StyleSheet.create({
   barsContainer: {
     flex: 1,
     position: 'relative',
+    paddingRight: 8, // Đảm bảo label ngày cuối không bị cắt
   },
   gridLinesContainer: {
     position: 'absolute',
@@ -884,7 +1213,7 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     marginTop: 4,
-    fontSize: 8,
+    fontSize: 7,
     color: '#9ca3af',
     fontWeight: '700',
   },
@@ -1263,7 +1592,6 @@ const styles = StyleSheet.create({
   weekendLocationAqiValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#b91c1c',
   },
   weekendSectionHeading: {
     marginTop: 12,
