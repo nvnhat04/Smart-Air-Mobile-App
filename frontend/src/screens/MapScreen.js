@@ -96,7 +96,11 @@ const generateLeafletHTML = (baseUrl) => `
         } catch (e) {}
       };
     
-      const map = L.map('map', { zoomControl: false }).setView([21.0285, 105.8542], 11);
+      const map = L.map('map', { 
+        zoomControl: false,
+        minZoom: 7,
+        maxZoom: 16
+      }).setView([21.0285, 105.8542], 11);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -125,7 +129,8 @@ const generateLeafletHTML = (baseUrl) => `
         wmsLayer = L.tileLayer(
           tileUrl,
           {
-            maxZoom: 18,
+            minZoom: 7,
+            maxZoom: 16,
             transparent: true,
             opacity: 0.6,
             attribution: '&copy; SmartAQ PM2.5',
@@ -317,7 +322,7 @@ const generateLeafletHTML = (baseUrl) => `
             
             // Bỏ qua stations không có data hoặc data = 0
             if (!aqi || aqi === 0) {
-              console.log('Skipping station without data:', s.name);
+              // console.log('Skipping station without data:', s.name);
               return;
             }
             
@@ -459,16 +464,16 @@ export default function MapScreen() {
         console.log(`✅ Loaded ${stations.length} stations from CEM`);
         
         // Debug: Log chi tiết stations
-        if (stations.length > 0) {
-          console.log('📊 First station sample:', {
-            id: stations[0].id,
-            name: stations[0].name,
-            lat: stations[0].lat,
-            lng: stations[0].lng,
-            aqi: stations[0].aqi,
-            baseAqi: stations[0].baseAqi,
-          });
-        }
+        // if (stations.length > 0) {
+        //   console.log('📊 First station sample:', {
+        //     id: stations[0].id,
+        //     name: stations[0].name,
+        //     lat: stations[0].lat,
+        //     lng: stations[0].lng,
+        //     aqi: stations[0].aqi,
+        //     baseAqi: stations[0].baseAqi,
+        //   });
+        // }
         
         setCemStations(stations);
       } catch (error) {
@@ -573,13 +578,27 @@ export default function MapScreen() {
       const data = await response.json();
       const address = data.address || {};
       
+      // Extract address components
+      const road = address.road || address.street || '';
+      const suburb = address.suburb || address.neighbourhood || '';
+      const district = address.city_district || address.district || '';
       const city = address.city || address.town || address.village || '';
-      const district = address.city_district || address.district || address.suburb || '';
       const state = address.state || '';
       
+      // Build clean address string - bỏ postcode và country
+      const addressParts = [
+        road,
+        suburb,
+        district,
+        city,
+        state
+      ].filter(Boolean);
+      
+      const cleanAddress = addressParts.join(', ');
+      
       return {
-        name: data.display_name?.split(',')[0] || 'Điểm được chọn',
-        address: data.display_name || '',
+        name: road || suburb || district || city || 'Điểm được chọn',
+        address: cleanAddress || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
         district: district || city,
         city: state || city,
       };

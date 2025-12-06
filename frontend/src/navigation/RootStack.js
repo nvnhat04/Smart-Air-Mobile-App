@@ -1,15 +1,21 @@
-import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import RootTabs from './RootTabs';
 import DetailStationScreen from '../screens/DetailStationScreen';
+import IntroScreen from '../screens/IntroScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import RootTabs from './RootTabs';
 
 const Stack = createNativeStackNavigator();
 
 export default function RootStack() {
   return (
     <Stack.Navigator>
+      {/* Intro screen - first time users */}
+      <Stack.Screen
+        name="Intro"
+        component={IntroScreen}
+        options={{ headerShown: false }}
+      />
       {/* Auth screens */}
       <Stack.Screen
         name="Login"

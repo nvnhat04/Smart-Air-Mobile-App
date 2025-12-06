@@ -149,7 +149,7 @@ export const useLocationTracking = (enabled = true) => {
     try {
       const history = await api.getLocationHistory(days);
       console.log('[useLocationTracking] Location history loaded:', history.length, 'records');
-        console.log('[useLocationTracking] Location history data:', history);
+        // console.log('[useLocationTracking] Location history data:', history);
       return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     } catch (error) {
       console.error('[useLocationTracking] Failed to get location history:', error);

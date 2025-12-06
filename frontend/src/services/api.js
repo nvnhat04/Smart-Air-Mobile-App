@@ -46,7 +46,7 @@ try {
 // Single BASE_URL for all endpoints (port 8000)
 const DEFAULT_FALLBACK = 'http://10.0.2.2:8000';
 const DEPLOY_URL = ''; // Tắt ngrok để test local: 'https://78fe9b102ec3.ngrok-free.app'
-const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // IP máy tính trên WiFi
+const LOCAL_NETWORK_URL = process.env.LOCAL_NETWORK_URL; // IP máy tính trên WiFi
 const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
 
 // console.warn(`[api.js] BASE_URL: ${BASE_URL}`);
@@ -268,6 +268,50 @@ api.auth = {
       }
       return res.json();
     } catch (err) {
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
+        throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
+      }
+      throw err;
+    }
+  },
+
+  // Get location history statistics
+  getLocationStats: async (days = 7) => {
+    const url = `${BASE_URL}/location/stats?days=${days}`;
+    console.log(`[api.js] getLocationStats -> GET ${url}`);
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      
+      const data = await res.json();
+      console.log(`[api.js] getLocationStats response:`, {
+        total_records: data.total_records,
+        avg_aqi: data.avg_aqi,
+        date_range: data.date_range,
+      });
+      
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.warn('[api.js] getLocationStats timeout after 10s');
+        throw new Error('Request timeout - server took too long to respond');
+      }
       if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
         throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
       }
