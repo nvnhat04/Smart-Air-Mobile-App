@@ -2,8 +2,10 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { config } from '../../config';
+import { UserGroupSelector } from '../components/ui';
 import { BASE_URL } from '../services/api';
+import { getHealthAdvice } from '../utils/mapUtils';
+
 function generateWeeklyData(baseColor) {
   const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
   const today = new Date();
@@ -52,6 +54,13 @@ export default function DetailStationScreen() {
   const [realtimeData, setRealtimeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState(null);
+  const [userGroup, setUserGroup] = useState('normal'); // 'normal' or 'sensitive'
+
+  // Handle user group change with logging
+  const handleUserGroupChange = (newGroup) => {
+    console.log('🔄 User group changed:', userGroup, '->', newGroup);
+    setUserGroup(newGroup);
+  };
 
   // Fetch forecast data from server
   useEffect(() => {
@@ -124,6 +133,8 @@ export default function DetailStationScreen() {
   }, [station?.lat, station?.lon]);
 
   const data = useMemo(() => {
+    console.log('🔍 Recalculating data with userGroup:', userGroup);
+    
     if (!station) {
       return {
         name: 'Trạm quan trắc',
@@ -134,29 +145,31 @@ export default function DetailStationScreen() {
         wind: '5.0',
         pm25: '60.0',
         color: '#4b5563',
-        advice: {
-          text: 'Theo dõi chất lượng không khí và hạn chế vận động mạnh ngoài trời.',
-          action: 'Theo dõi thêm',
-        },
+        advice: getHealthAdvice(100, userGroup),
       };
     }
     
     // Nếu có realtime data, dùng data mới nhất
     const latestData = realtimeData?.latest;
+    const currentAqi = latestData?.aqi || station.aqi || 80;
+    const healthAdvice = getHealthAdvice(currentAqi, userGroup);
     
-    return {
+    // Calculate pm25 as number
+    const pm25Value = latestData?.pm25 || station.pm25 || (currentAqi * 0.6);
+    
+    const result = {
+      ...station, // Spread station FIRST
       wind: latestData?.wind_speed?.toFixed(1) || latestData?.windSpeed?.toFixed(1) || station.windSpeed?.toFixed(1) || station.wind || '5.0',
-      pm25: latestData?.pm25?.toFixed(1) || station.pm25?.toFixed(1) || String((station.aqi || 80) * 0.6),
+      pm25: pm25Value, // Keep as number for UI formatting
       humidity: latestData?.humidity || station.humidity || 70,
       temp: latestData?.temp || station.temp || 28,
-      aqi: latestData?.aqi || station.aqi || 80,
-      advice: station.advice ?? {
-        text: 'Theo dõi chất lượng không khí và hạn chế vận động mạnh ngoài trời.',
-        action: 'Theo dõi thêm',
-      },
-      ...station,
+      aqi: currentAqi,
+      advice: healthAdvice, // Override advice LAST
     };
-  }, [station, realtimeData]);
+    
+    console.log('📊 New advice:', healthAdvice?.text?.substring(0, 50) + '...');
+    return result;
+  }, [station, realtimeData, userGroup]);
 
   // Sử dụng realtime data nếu có, không thì fallback về mock data
   const weekly = useMemo(() => {
@@ -310,7 +323,9 @@ export default function DetailStationScreen() {
 
             <View style={styles.pm25Card}>
               <Text style={styles.pm25Label}>PM2.5</Text>
-              <Text style={styles.pm25Value}>{data.pm25.toFixed(2)} µg/m³</Text>
+              <Text style={styles.pm25Value}>
+                {typeof data.pm25 === 'number' ? data.pm25.toFixed(2) : data.pm25} µg/m³
+              </Text>
             </View>
 
             <View style={styles.adviceBubble}>
@@ -356,33 +371,35 @@ export default function DetailStationScreen() {
               <Text style={styles.healthTitle}>Khuyến cáo sức khỏe</Text>
             </View>
 
-            <View style={styles.healthBody}>
-              {/* Hàng 1: Hành động nên làm + pill hành động */}
-              <View style={styles.healthRowBox}>
-                <View style={styles.healthRowPrimary}>
-                  <View style={styles.healthCheckIconBox}>
-                    <Text style={styles.healthCheckIcon}>✓</Text>
-                  </View>
-                  <Text style={styles.healthPrimaryLabel}>Hành động nên làm</Text>
-                  <View style={styles.healthActionPill}>
-                    <Text style={styles.healthActionText}>
-                      {data.advice?.action || 'Đeo khẩu trang'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
+            {/* User Group Selector */}
+            <UserGroupSelector
+              selectedGroup={userGroup}
+              onGroupChange={handleUserGroupChange}
+              style={{ marginVertical: 12 }}
+            />
 
-              {/* Hàng 2: cảnh báo nhóm nhạy cảm */}
-              <View style={[styles.healthRowBox, { marginTop: 8 }]}>
-                <View style={styles.healthRowWarning}>
-                  <View style={styles.healthWarningIconBox}>
-                    <Text style={styles.healthWarningIcon}>!</Text>
-                  </View>
-                  <Text style={styles.healthText}>
-                    Nhóm người nhạy cảm (người già, trẻ em) nên hạn chế ra ngoài vào thời điểm này.
+            <View style={styles.healthBody}>
+              {/* Action pill */}
+              {/* <View style={styles.healthActionRow}>
+                <Text style={styles.healthActionLabel}>→</Text>
+                <View style={styles.healthActionPillLarge}>
+                  <Text style={styles.healthActionTextLarge}>
+                    {data.advice?.action || 'Đeo khẩu trang'}
                   </Text>
                 </View>
+              </View> */}
+
+              {/* Khuyến cáo chi tiết */}
+              <View style={styles.healthAdviceBox}>
+                <Text style={styles.healthAdviceText}>
+                  {data.advice?.text}
+                </Text>
               </View>
+
+              {/* Nguồn: Bộ Y tế */}
+              <Text style={styles.healthSource}>
+                Nguồn: Công văn 12/MT-SKHC/2024 - Bộ Y tế
+              </Text>
             </View>
           </View>
 
@@ -848,7 +865,8 @@ const styles = StyleSheet.create({
   healthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    justifyContent: 'space-between',
   },
   healthIconBox: {
     width: 32,
@@ -863,82 +881,60 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#ffffff',
   },
+  healthTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   healthTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#14532d',
   },
   healthBody: {
-    marginTop: 2,
+    gap: 10,
   },
-  healthRowBox: {
-    borderRadius: 14,
+  healthActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  healthActionLabel: {
+    fontSize: 20,
+    color: '#16a34a',
+    fontWeight: '700',
+  },
+  healthActionPillLarge: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+  },
+  healthActionTextLarge: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  healthAdviceBox: {
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#dcfce7',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    padding: 12,
   },
-  healthRowPrimary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  healthCheckIconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  healthCheckIcon: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  healthPrimaryLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+  healthAdviceText: {
+    fontSize: 13,
     color: '#166534',
-    flexShrink: 0,
+    lineHeight: 20,
   },
-  healthActionPill: {
-    marginLeft: 'auto',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#2563eb',
-  },
-  healthActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  healthRowWarning: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  healthWarningIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    backgroundColor: '#fed7aa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  healthWarningIcon: {
-    fontSize: 16,
-    color: '#f97316',
-    fontWeight: '700',
-  },
-  healthText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#166534',
+  healthSource: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   weeklyCard: {
     borderRadius: 24,

@@ -29,40 +29,88 @@ export const createDayOptions = () => {
 };
 
 /**
- * Get health advice based on AQI value
+ * Get health advice based on AQI value and user group
+ * Based on: Công văn 12/MT-SKHC/2024 - Bộ Y tế
  * @param {number} aqi - Air Quality Index value
+ * @param {string} userGroup - 'normal' (người bình thường) or 'sensitive' (nhóm nhạy cảm)
  * @returns {Object} Health advice object with text and action
  */
-export const getHealthAdvice = (aqi) => {
-  const advice = {
-    good: { 
-      text: 'Không khí tuyệt vời! Hãy tận hưởng các hoạt động ngoài trời.', 
-      action: 'Mở cửa sổ' 
-    },
-    moderate: { 
-      text: 'Chất lượng chấp nhận được. Nhóm nhạy cảm nên hạn chế vận động mạnh.', 
-      action: 'Theo dõi thêm' 
-    },
-    unhealthy: { 
-      text: 'Có hại cho sức khỏe. Nên đeo khẩu trang khi ra đường.', 
-      action: 'Đeo khẩu trang' 
-    },
-    veryUnhealthy: { 
-      text: 'Rất có hại. Hạn chế tối đa ra ngoài. Đóng kín cửa sổ.', 
-      action: 'Đóng cửa sổ' 
-    },
-    hazardous: { 
-      text: 'Nguy hại! Ở trong nhà và sử dụng máy lọc không khí ngay.', 
-      action: 'Dùng máy lọc khí' 
-    },
+export const getHealthAdvice = (aqi, userGroup = 'normal') => {
+  console.log('🏥 getHealthAdvice called with:', { aqi, userGroup });
+  const isSensitive = userGroup === 'sensitive';
+  console.log('🏥 isSensitive:', isSensitive);
+  
+  // AQI 0-50: Tốt (Good)
+  if (!aqi || aqi <= 50) {
+    return {
+      text: isSensitive 
+        ? 'An toàn cho mọi hoạt động ngoài trời.'
+        : 'Chất lượng không khí tốt.',
+      action: 'Thoải mái ra ngoài',
+      level: 'good',
+      color: '#22c55e'
+    };
+  }
+  
+  // AQI 51-100: Trung bình (Moderate)
+  if (aqi <= 100) {
+    const result = {
+      text: isSensitive
+        ? 'Hạn chế hoạt động ngoài trời lâu. Theo dõi triệu chứng khó thở.'
+        : 'Chất lượng không khí chấp nhận được.',
+      action: isSensitive ? 'Hạn chế thời gian' : 'Bình thường',
+      level: 'moderate',
+      color: '#eab308'
+    };
+    console.log('🏥 Returning for AQI 51-100:', result.text);
+    return result;
+  }
+  
+  // AQI 101-150: Kém (Unhealthy for Sensitive Groups)
+  if (aqi <= 150) {
+    return {
+      text: isSensitive
+        ? 'Tránh ra ngoài. Nếu cần thiết: đeo khẩu trang N95, hạn chế tối đa thời gian.'
+        : 'Đeo khẩu trang khi ra ngoài. Đóng cửa sổ trong nhà.',
+      action: 'Đeo khẩu trang',
+      level: 'unhealthy_sensitive',
+      color: '#f97316'
+    };
+  }
+  
+  // AQI 151-200: Xấu (Unhealthy)
+  if (aqi <= 200) {
+    return {
+      text: isSensitive
+        ? 'KHÔNG ra ngoài. Đóng kín cửa, bật máy lọc không khí. Gọi bác sĩ nếu khó thở.'
+        : 'Ở trong nhà. Ra ngoài bắt buộc: đeo khẩu trang N95, hạn chế thời gian.',
+      action: 'Ở trong nhà',
+      level: 'unhealthy',
+      color: '#ef4444'
+    };
+  }
+  
+  // AQI 201-300: Rất xấu (Very Unhealthy)
+  if (aqi <= 300) {
+    return {
+      text: isSensitive
+        ? 'TUYỆT ĐỐI không ra ngoài! Bật máy lọc không khí. Gọi cấp cứu nếu có triệu chứng.'
+        : 'Hạn chế tối đa ra ngoài. Bắt buộc: khẩu trang N95, thời gian tối thiểu.',
+      action: 'Máy lọc không khí',
+      level: 'very_unhealthy',
+      color: '#a855f7'
+    };
+  }
+  
+  // AQI 301+: Nguy hại (Hazardous)
+  return {
+    text: isSensitive
+      ? '🚨 KHẨN CẤP! Ở trong nhà tuyệt đối. Máy lọc công suất cao. Gọi 115 nếu khó thở.'
+      : '🚨 CẢNH BÁO NGHIÊM TRỌNG! Ở trong nhà, đóng kín cửa, bật máy lọc không khí.',
+    action: '⚠️ Khẩn cấp',
+    level: 'hazardous',
+    color: '#7c2d12'
   };
-
-  if (!aqi) return advice.good;
-  if (aqi <= 50) return advice.good;
-  if (aqi <= 100) return advice.moderate;
-  if (aqi <= 150) return advice.unhealthy;
-  if (aqi <= 200) return advice.veryUnhealthy;
-  return advice.hazardous;
 };
 
 /**
