@@ -1,6 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useLocationTracking } from '../hooks/useLocationTracking';
+import {
+  getAQIColor,
+  getExposureMultiplier,
+  processLocationHistory as processHistory
+} from '../utils';
 
 const generateAnalyticsData = () => {
   const locations = [
@@ -46,7 +52,7 @@ const generateAnalyticsData = () => {
     type: 'present',
   });
 
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i < 7; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(
@@ -76,42 +82,56 @@ const generateAnalyticsData = () => {
   return analyticsData;
 };
 
-const getAQIColor = (aqi) => {
-  if (aqi <= 50) return '#22c55e';
-  if (aqi <= 100) return '#eab308';
-  if (aqi <= 150) return '#f97316';
-  if (aqi <= 200) return '#ef4444';
-  return '#7f1d1d';
-};
-
 export default function AnalyticExposureScreen() {
-  const analyticsData = useMemo(() => generateAnalyticsData(), []);
+  const { getLocationHistory } = useLocationTracking(true);
+  const [historyData, setHistoryData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState(7);
+  const [selectedRadius, setSelectedRadius] = useState(100);
+  const [showRadiusMenu, setShowRadiusMenu] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'history', 'escape'
+  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'last3days', 'last7days'
+  const [exposureMode, setExposureMode] = useState('outdoor'); // 'outdoor', 'indoor', 'indoor_purifier'
+  const [showExposureMenu, setShowExposureMenu] = useState(false);
+  const [userLocation, setUserLocation] = useState(null); // Vị trí thực của user từ GPS/history
+  
+  // Load location history khi component mount (7 ngày)
+  useEffect(() => {
+    const loadHistory = async () => {
+      setLoading(true);
+      try {
+        const history = await getLocationHistory(7); // Chỉ lấy 7 ngày
+        setHistoryData(history);
+        console.log('[AnalyticExposureScreen] Loaded 7-day history:', history.length, 'records');
+        
+        // Lấy vị trí gần nhất của user từ history
+        if (history.length > 0) {
+          const latestLocation = history[0]; // History đã sorted theo timestamp giảm dần
+          setUserLocation({
+            name: latestLocation.address || 'Vị trí của bạn',
+            address: latestLocation.address,
+            aqi: latestLocation.aqi,
+            latitude: latestLocation.latitude,
+            longitude: latestLocation.longitude,
+          });
+          console.log('[AnalyticExposureScreen] User location set from history:', latestLocation.address);
+        }
+        
+        // Process history với API PM2.5 forecast
+        const processed = await processHistory(history);
+        setAnalyticsData(processed);
+      } catch (error) {
+        console.error('[AnalyticExposureScreen] Failed to load history:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadHistory();
+  }, [getLocationHistory]);
 
-  const selectedData = analyticsData[selectedIdx];
-
-  const pastSlice = analyticsData.slice(0, 8);
-  const futureSlice = analyticsData.slice(8);
-  const pastAvg = Math.round(
-    pastSlice.reduce((sum, d) => sum + d.aqi, 0) / Math.max(pastSlice.length, 1),
-  );
-  const futureAvg = Math.round(
-    futureSlice.reduce((sum, d) => sum + d.aqi, 0) / Math.max(futureSlice.length, 1),
-  );
-  const diff = futureAvg - pastAvg;
-
-  const pastPm25Avg = (pastAvg * 0.6).toFixed(1);
-  const futurePm25Avg = (futureAvg * 0.6).toFixed(1);
-  const cigPast = (pastPm25Avg / 22).toFixed(1);
-  const cigFuture = (futurePm25Avg / 22).toFixed(1);
-
-  const maxAqi = Math.max(...analyticsData.map((d) => d.aqi), 10);
-
-  // Mock data "trốn bụi đi chơi" giống Analytics.jsx
-  const userLocation = {
-    name: 'Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội',
-    aqi: 141,
-  };
+  // Mock data "trốn bụi đi chơi"
   const allDestinations = useMemo(
     () => [
       { id: 1, name: 'Ecopark, Hưng Yên', aqi: 40, weatherType: 'sun', temp: 24, distance: 18, driveTime: '35 phút', recommendation: 'Công viên sinh thái, hồ nước rộng, đạp xe dạo chơi' },
@@ -127,9 +147,7 @@ export default function AnalyticExposureScreen() {
     ],
     [],
   );
-  const [selectedRadius, setSelectedRadius] = useState(100);
-  const radiusOptions = [50, 100, 150, 200];
-  const [showRadiusMenu, setShowRadiusMenu] = useState(false);
+
   const filteredDestinations = useMemo(
     () =>
       allDestinations
@@ -137,6 +155,70 @@ export default function AnalyticExposureScreen() {
         .sort((a, b) => a.aqi - b.aqi),
     [allDestinations, selectedRadius],
   );
+
+  // Filter history data theo ngày (PHẢI ĐẶT TRƯỚC if/return để tuân thủ Rules of Hooks)
+  const filteredHistoryData = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    return historyData.filter(item => {
+      const itemDate = new Date(item.timestamp);
+      
+      switch (dateFilter) {
+        case 'today':
+          return itemDate >= today;
+        case 'last3days':
+          const threeDaysAgo = new Date(today);
+          threeDaysAgo.setDate(today.getDate() - 3);
+          return itemDate >= threeDaysAgo;
+        case 'last7days':
+          const sevenDaysAgo = new Date(today);
+          sevenDaysAgo.setDate(today.getDate() - 7);
+          return itemDate >= sevenDaysAgo;
+        case 'all':
+        default:
+          return true;
+      }
+    });
+  }, [historyData, dateFilter]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.loadingText}>Đang tải dữ liệu phơi nhiễm...</Text>
+      </View>
+    );
+  }
+
+  const selectedData = analyticsData[selectedIdx];
+
+  // Hàm tính hệ số phơi nhiễm
+  const exposureMultiplier = getExposureMultiplier(exposureMode);
+
+  // Phân chia dựa trên type (past/present/future) thay vì index cố định
+  const pastSlice = analyticsData.filter(d => d.type === 'past');
+  const presentSlice = analyticsData.filter(d => d.type === 'present');
+  const futureSlice = analyticsData.filter(d => d.type === 'future');
+  
+  // Tính trung bình chỉ cho các ngày có data và áp dụng hệ số phơi nhiễm
+  const pastAvg = pastSlice.length > 0 
+    ? Math.round(pastSlice.reduce((sum, d) => sum + d.aqi, 0) / pastSlice.length * exposureMultiplier)
+    : 0;
+  const futureAvg = futureSlice.length > 0
+    ? Math.round(futureSlice.reduce((sum, d) => sum + d.aqi, 0) / futureSlice.length * exposureMultiplier)
+    : 0;
+  const diff = futureAvg - pastAvg;
+
+  const pastPm25Avg = (pastAvg * 0.6).toFixed(1);
+  const futurePm25Avg = (futureAvg * 0.6).toFixed(1);
+  const cigPast = (pastPm25Avg / 22).toFixed(1);
+  const cigFuture = (futurePm25Avg / 22).toFixed(1);
+
+  const maxAqi = Math.max(...analyticsData.map((d) => d.aqi * exposureMultiplier), 10);
+
+  const radiusOptions = [50, 100, 150, 200];
 
   return (
     <ScrollView
@@ -147,45 +229,214 @@ export default function AnalyticExposureScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.headerTitle}>Lịch sử &amp; dự báo</Text>
-          <Text style={styles.headerSubtitle}>Phân tích chất lượng không khí 15 ngày</Text>
+          <Text style={styles.headerSubtitle}>Phân tích chất lượng không khí 13 ngày</Text>
+        </View>
+        
+        {/* Compact Exposure Mode Dropdown */}
+        <View>
+          <TouchableOpacity
+            style={styles.exposureModeDropdown}
+            onPress={() => setShowExposureMenu(!showExposureMenu)}
+            activeOpacity={0.7}
+          >
+            <Feather 
+              name={exposureMode === 'outdoor' ? 'sun' : exposureMode === 'indoor' ? 'home' : 'wind'} 
+              size={14} 
+              color="#1d4ed8" 
+            />
+            <Text style={styles.exposureModeDropdownText}>
+              {exposureMode === 'outdoor' ? 'Ngoài trời' : 
+               exposureMode === 'indoor' ? 'Trong nhà' : 
+               'Có máy lọc'}
+            </Text>
+            <Feather 
+              name={showExposureMenu ? 'chevron-up' : 'chevron-down'} 
+              size={14} 
+              color="#64748b" 
+            />
+          </TouchableOpacity>
+          
+          {showExposureMenu && (
+            <View style={styles.exposureModeMenu}>
+              <TouchableOpacity
+                style={[styles.exposureModeMenuItem, exposureMode === 'outdoor' && styles.exposureModeMenuItemActive]}
+                onPress={() => {
+                  setExposureMode('outdoor');
+                  setShowExposureMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="sun" size={14} color={exposureMode === 'outdoor' ? '#1d4ed8' : '#64748b'} />
+                <Text style={[styles.exposureModeMenuText, exposureMode === 'outdoor' && styles.exposureModeMenuTextActive]}>
+                  Ngoài trời
+                </Text>
+                <Text style={styles.exposureModeMenuMultiplier}>1.0x</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.exposureModeMenuItem, exposureMode === 'indoor' && styles.exposureModeMenuItemActive]}
+                onPress={() => {
+                  setExposureMode('indoor');
+                  setShowExposureMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="home" size={14} color={exposureMode === 'indoor' ? '#1d4ed8' : '#64748b'} />
+                <Text style={[styles.exposureModeMenuText, exposureMode === 'indoor' && styles.exposureModeMenuTextActive]}>
+                  Trong nhà
+                </Text>
+                <Text style={styles.exposureModeMenuMultiplier}>0.5x</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.exposureModeMenuItem, exposureMode === 'indoor_purifier' && styles.exposureModeMenuItemActive]}
+                onPress={() => {
+                  setExposureMode('indoor_purifier');
+                  setShowExposureMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="wind" size={14} color={exposureMode === 'indoor_purifier' ? '#1d4ed8' : '#64748b'} />
+                <Text style={[styles.exposureModeMenuText, exposureMode === 'indoor_purifier' && styles.exposureModeMenuTextActive]}>
+                  Có máy lọc
+                </Text>
+                <Text style={styles.exposureModeMenuMultiplier}>0.1x</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
 
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
+          onPress={() => setActiveTab('overview')}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="bar-chart-2" 
+            size={16} 
+            color={activeTab === 'overview' ? '#1d4ed8' : '#64748b'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>
+            Tổng quan
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'history' && styles.tabActive]}
+          onPress={() => setActiveTab('history')}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="clock" 
+            size={16} 
+            color={activeTab === 'history' ? '#1d4ed8' : '#64748b'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
+            Lịch sử
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'escape' && styles.tabActive]}
+          onPress={() => setActiveTab('escape')}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="map" 
+            size={16} 
+            color={activeTab === 'escape' ? '#1d4ed8' : '#64748b'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'escape' && styles.tabTextActive]}>
+            Trốn bụi
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tab Content: Tổng quan */}
+      {activeTab === 'overview' && (
+        <>
       {/* Mini bar chart dạng thẻ */}
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <View style={styles.chartAccent} />
-          <Text style={styles.chartTitle}>Diễn biến 15 ngày</Text>
+          <Text style={styles.chartTitle}>Diễn biến 13 ngày</Text>
         </View>
 
-        <View style={styles.barRow}>
-          {analyticsData.map((item, idx) => {
-            const heightRatio = item.aqi / maxAqi;
-            const barHeight = 90 * heightRatio + 10;
-            const isSelected = idx === selectedIdx;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={styles.barWrapper}
-                onPress={() => setSelectedIdx(idx)}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: barHeight,
-                      backgroundColor: getAQIColor(item.aqi),
-                      opacity: isSelected ? 1 : 0.7,
-                      borderWidth: isSelected ? 1.5 : 0,
-                      borderColor: '#0f172a',
-                    },
-                  ]}
-                />
-                <Text style={styles.barLabel}>{item.date}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        {/* Chart container with Y-axis */}
+        <View style={styles.chartContainer}>
+          {/* Y-axis labels */}
+          <View style={styles.yAxisContainer}>
+            <Text style={styles.yAxisLabel}>300</Text>
+            <Text style={styles.yAxisLabel}>250</Text>
+            <Text style={styles.yAxisLabel}>200</Text>
+            <Text style={styles.yAxisLabel}>150</Text>
+            <Text style={styles.yAxisLabel}>100</Text>
+            <Text style={styles.yAxisLabel}>50</Text>
+            <Text style={styles.yAxisLabel}>0</Text>
+          </View>
+
+          {/* Bars container */}
+          <View style={styles.barsContainer}>
+            {/* Grid lines */}
+            <View style={styles.gridLinesContainer}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={styles.gridLine} />
+              ))}
+            </View>
+
+            <View style={styles.barRow}>
+              {analyticsData.map((item, idx) => {
+                const adjustedAqi = item.aqi * exposureMultiplier;
+                const heightRatio = Math.min(adjustedAqi, 300) / 300; // Max AQI 300
+                const barHeight = 120 * heightRatio + 5;
+                const isSelected = idx === selectedIdx;
+                const isToday = item.type === 'present';
+                
+                // Hiển thị label mỗi 3 ngày (index 0, 3, 6, 9, 12) hoặc ngày hôm nay
+                const shouldShowLabel = idx % 3 === 0 || isToday;
+                const dateLabel = isToday ? '' : item.date; // Hôm nay không hiển thị ngày
+                
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={styles.barWrapper}
+                    onPress={() => setSelectedIdx(idx)}
+                    activeOpacity={0.8}
+                  >
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          height: barHeight,
+                          backgroundColor: getAQIColor(adjustedAqi),
+                          opacity: isSelected ? 1 : 0.7,
+                          borderWidth: isToday ? 2 : (isSelected ? 1.5 : 0),
+                          borderColor: isToday ? '#2563eb' : '#0f172a',
+                          shadowColor: isToday ? '#2563eb' : 'transparent',
+                          shadowOpacity: isToday ? 0.3 : 0,
+                          shadowRadius: 4,
+                          shadowOffset: { width: 0, height: 2 },
+                          elevation: isToday ? 3 : 0,
+                        },
+                      ]}
+                    />
+                    {shouldShowLabel && (
+                      <View style={styles.barLabelContainer}>
+                        {isToday ? (
+                          <Text style={styles.barLabelTodayTag}>Hôm nay</Text>
+                        ) : (
+                          <Text style={styles.barLabel}>{dateLabel}</Text>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
 
         {/* Dynamic info box */}
@@ -212,10 +463,10 @@ export default function AnalyticExposureScreen() {
             <Text
               style={[
                 styles.selectedAqiValue,
-                { color: getAQIColor(selectedData.aqi) },
+                { color: getAQIColor(selectedData.aqi * exposureMultiplier) },
               ]}
             >
-              {selectedData.aqi}
+              {Math.round(selectedData.aqi * exposureMultiplier)}
             </Text>
             <Text style={styles.selectedAqiLabel}>AQI</Text>
           </View>
@@ -256,10 +507,6 @@ export default function AnalyticExposureScreen() {
             <Text style={styles.exposureCig}>
               ≈ hút <Text style={styles.exposureCigValue}>{cigPast}</Text> điếu thuốc
             </Text>
-
-            <View style={styles.exposureFooterPill}>
-              <Text style={styles.exposureFooterPillText}>📍 7 địa điểm đã ghé</Text>
-            </View>
           </View>
 
           {/* Future card */}
@@ -311,7 +558,12 @@ export default function AnalyticExposureScreen() {
           </Text>
         </View>
       </View>
+      </>
+      )}
 
+      {/* Tab Content: Trốn bụi */}
+      {activeTab === 'escape' && (
+        <View style={styles.escapeContainer}>
       {/* Trốn bụi cuối tuần */}
       <View style={styles.weekendSection}>
         {/* Header + nút chọn bán kính */}
@@ -364,20 +616,40 @@ export default function AnalyticExposureScreen() {
         </View>
 
         {/* Thẻ vị trí hiện tại */}
+        {userLocation ? (
         <View style={styles.weekendLocationCard}>
           <View>
             <Text style={styles.weekendLocationLabel}>Vị trí hiện tại</Text>
-            <Text style={styles.weekendLocationName}>{userLocation.name}</Text>
+            <Text style={styles.weekendLocationName}>{userLocation.name || userLocation.address}</Text>
           </View>
           <View style={styles.weekendLocationAqiBox}>
             <Text style={styles.weekendLocationAqiLabel}>AQI</Text>
-            <Text style={styles.weekendLocationAqiValue}>{userLocation.aqi}</Text>
+            <Text style={[
+              styles.weekendLocationAqiValue,
+              { color: getAQIColor(userLocation.aqi || 0) }
+            ]}>
+               {userLocation.aqi || 0}
+            </Text>
           </View>
         </View>
+        ) : (
+          <View style={styles.weekendLocationCard}>
+            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 16 }}>
+              <Feather name="map-pin" size={32} color="#cbd5e1" />
+              <Text style={{ fontSize: 14, color: '#64748b', marginTop: 8 }}>
+                Chưa có vị trí
+              </Text>
+              <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, textAlign: 'center' }}>
+                Nhấn nút GPS trên bản đồ để lưu vị trí của bạn
+              </Text>
+            </View>
+          </View>
+        )}
+      
 
         <Text style={styles.weekendSectionHeading}>Gợi ý hàng đầu</Text>
 
-        {filteredDestinations.map((dest) => {
+        {userLocation && filteredDestinations.map((dest) => {
           const cleanRatio = (userLocation.aqi / dest.aqi).toFixed(1);
           return (
             <View key={dest.id} style={styles.weekendCardOuter}>
@@ -421,11 +693,183 @@ export default function AnalyticExposureScreen() {
           );
         })}
       </View>
+        </View>
+      )}
+
+      {/* Tab Content: Lịch sử chi tiết */}
+      {activeTab === 'history' && (
+        <View style={styles.historyContainer}>
+          <View style={styles.historyHeader}>
+            <View style={styles.historyHeaderIcon}>
+              <Feather name="map-pin" size={18} color="#1d4ed8" />
+            </View>
+            <View style={styles.historyHeaderText}>
+              <Text style={styles.historyTitle}>Lịch sử vị trí đã lưu</Text>
+              <Text style={styles.historySubtitle}>
+                {filteredHistoryData.length} vị trí
+                {dateFilter === 'today' && ' • Hôm nay'}
+                {dateFilter === 'last3days' && ' • 3 ngày qua'}
+                {dateFilter === 'last7days' && ' • 7 ngày qua'}
+                {dateFilter === 'all' && ` • Tất cả (${historyData.length} tổng)`}
+              </Text>
+            </View>
+          </View>
+
+          {/* Date Filter */}
+          <View style={styles.filterContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'all' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('all')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterButtonText, dateFilter === 'all' && styles.filterButtonTextActive]}>
+                  Tất cả
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'today' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('today')}
+                activeOpacity={0.7}
+              >
+                <Feather 
+                  name="sun" 
+                  size={14} 
+                  color={dateFilter === 'today' ? '#1d4ed8' : '#64748b'} 
+                />
+                <Text style={[styles.filterButtonText, dateFilter === 'today' && styles.filterButtonTextActive]}>
+                  Hôm nay
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'last3days' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('last3days')}
+                activeOpacity={0.7}
+              >
+                <Feather 
+                  name="calendar" 
+                  size={14} 
+                  color={dateFilter === 'last3days' ? '#1d4ed8' : '#64748b'} 
+                />
+                <Text style={[styles.filterButtonText, dateFilter === 'last3days' && styles.filterButtonTextActive]}>
+                  3 ngày qua
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, dateFilter === 'last7days' && styles.filterButtonActive]}
+                onPress={() => setDateFilter('last7days')}
+                activeOpacity={0.7}
+              >
+                <Feather 
+                  name="calendar" 
+                  size={14} 
+                  color={dateFilter === 'last7days' ? '#1d4ed8' : '#64748b'} 
+                />
+                <Text style={[styles.filterButtonText, dateFilter === 'last7days' && styles.filterButtonTextActive]}>
+                  7 ngày qua
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {filteredHistoryData.length === 0 ? (
+            <View style={styles.emptyHistory}>
+              <Feather name="map" size={48} color="#cbd5e1" />
+              <Text style={styles.emptyHistoryText}>
+                {historyData.length === 0 ? 'Chưa có lịch sử vị trí' : 'Không có dữ liệu'}
+              </Text>
+              <Text style={styles.emptyHistorySubtext}>
+                {historyData.length === 0 
+                  ? 'Nhấn nút GPS trên bản đồ để lưu vị trí hiện tại'
+                  : 'Thử chọn bộ lọc khác'}
+              </Text>
+            </View>
+          ) : (
+            filteredHistoryData.map((item, index) => {
+              const date = new Date(item.timestamp);
+              const dateStr = date.toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              });
+              const timeStr = date.toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              
+              return (
+                <View key={`${item.timestamp}-${index}`} style={styles.historyCard}>
+                  <View style={styles.historyCardHeader}>
+                    <View style={[styles.historyCardAqiBadge, { backgroundColor: getAQIColor(item.aqi || 0) }]}>
+                      <Text style={styles.historyCardAqiText}>{item.aqi || 0}</Text>
+                    </View>
+                    <View style={styles.historyCardHeaderText}>
+                      <Text style={styles.historyCardDate}>{dateStr}</Text>
+                      <Text style={styles.historyCardTime}>{timeStr}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.historyCardBody}>
+                    <View style={styles.historyCardRow}>
+                      <Feather name="map-pin" size={14} color="#64748b" />
+                      <Text style={styles.historyCardLocation} numberOfLines={2}>
+                        {item.address || 'Không có địa chỉ'}
+                      </Text>
+                    </View>
+                    
+                    {item.pm25 && (
+                      <View style={styles.historyCardRow}>
+                        <Feather name="wind" size={14} color="#64748b" />
+                        <Text style={styles.historyCardMeta}>
+                          PM2.5: {item.pm25.toFixed(1)} µg/m³
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {item.weather && (
+                      <View style={styles.historyCardRow}>
+                        <Feather name="cloud" size={14} color="#64748b" />
+                        <Text style={styles.historyCardMeta}>
+                          {item.weather.temp}°C • {item.weather.description}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {item.latitude && item.longitude && (
+                      <View style={styles.historyCardRow}>
+                        <Feather name="navigation" size={14} color="#64748b" />
+                        <Text style={styles.historyCardMeta}>
+                          {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
   container: {
     flex: 1,
     backgroundColor: '#eff6ff',
@@ -451,6 +895,239 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 2,
   },
+  exposureModeDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+  },
+  exposureModeDropdownText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1d4ed8',
+  },
+  exposureModeMenu: {
+    position: 'absolute',
+    top: 36,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    minWidth: 160,
+    zIndex: 1000,
+  },
+  exposureModeMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  exposureModeMenuItemActive: {
+    backgroundColor: '#f0f9ff',
+  },
+  exposureModeMenuText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  exposureModeMenuTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '600',
+  },
+  exposureModeMenuMultiplier: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 6,
+  },
+  tabActive: {
+    backgroundColor: '#dbeafe',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  tabTextActive: {
+    color: '#1d4ed8',
+  },
+  escapeContainer: {
+    flex: 1,
+  },
+  historyContainer: {
+    flex: 1,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    gap: 12,
+  },
+  historyHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyHeaderText: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  historySubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  filterContainer: {
+    marginBottom: 16,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+  },
+  filterButtonActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#93c5fd',
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  filterButtonTextActive: {
+    color: '#1d4ed8',
+  },
+  emptyHistory: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 48,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyHistoryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+  },
+  emptyHistorySubtext: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  historyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  historyCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  historyCardAqiBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyCardAqiText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  historyCardHeaderText: {
+    flex: 1,
+  },
+  historyCardDate: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  historyCardTime: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  historyCardBody: {
+    gap: 8,
+  },
+  historyCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  historyCardLocation: {
+    flex: 1,
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  historyCardMeta: {
+    fontSize: 13,
+    color: '#64748b',
+  },
   chartCard: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
@@ -462,7 +1139,7 @@ const styles = StyleSheet.create({
   chartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   chartAccent: {
     width: 3,
@@ -476,26 +1153,80 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  chartContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  yAxisContainer: {
+    width: 32,
+    height: 145,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingRight: 6,
+    paddingBottom: 30,
+  },
+  yAxisLabel: {
+    fontSize: 9,
+    color: '#9ca3af',
+    fontWeight: '600',
+  },
+  barsContainer: {
+    flex: 1,
+    position: 'relative',
+    paddingRight: 8, // Đảm bảo label ngày cuối không bị cắt
+  },
+  gridLinesContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 145,
+    justifyContent: 'space-between',
+    paddingBottom: 30,
+  },
+  gridLine: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+  },
   barRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginTop: 8,
-    marginBottom: 8,
+    height: 145,
+    paddingBottom: 30,
   },
   barWrapper: {
     alignItems: 'center',
     flex: 1,
+    justifyContent: 'flex-end',
   },
   bar: {
     width: 10,
     borderRadius: 999,
     marginHorizontal: 2,
   },
+  barLabelContainer: {
+    position: 'absolute',
+    bottom: -26,
+    alignItems: 'center',
+  },
   barLabel: {
     marginTop: 4,
-    fontSize: 9,
+    fontSize: 7,
     color: '#9ca3af',
+    fontWeight: '700',
+  },
+  barLabelToday: {
+    color: '#2563eb',
+    fontWeight: '700',
+  },
+  barLabelTodayTag: {
+    marginTop: 1,
+    fontSize: 7,
+    color: '#2563eb',
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   selectedInfoCard: {
     marginTop: 8,
@@ -861,7 +1592,6 @@ const styles = StyleSheet.create({
   weekendLocationAqiValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#b91c1c',
   },
   weekendSectionHeading: {
     marginTop: 12,

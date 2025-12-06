@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import api from '../services/api';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons'; // Import icons for a modern touch
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import api from '../services/api';
 
 export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
@@ -120,6 +120,9 @@ export default function ProfileScreen() {
         <Text style={styles.cardTitle}>Account Info</Text>
         <ProfileRow icon="person-circle-outline" label="User ID" value={auth.uid} />
         <ProfileRow icon="mail-outline" label="Email" value={auth.email} />
+        {auth.username && (
+          <ProfileRow icon="at-outline" label="Username" value={`@${auth.username}`} />
+        )}
       </View>
       
       {/* Server Profile Details Card */}

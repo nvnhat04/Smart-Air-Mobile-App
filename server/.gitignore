@@ -27,6 +27,7 @@ MANIFEST
 
 # Virtual environments
 venv/
+.venv/
 env/
 ENV/
 env.bak/
@@ -55,3 +56,8 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+# Firebase
+firebase_admin_config.json
+firebase_key/
+testing/
+docs/

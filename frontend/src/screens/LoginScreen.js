@@ -1,27 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import api from '../services/api';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigation = useNavigation();
 
   const handleLogin = async () => {
+    if (!emailOrUsername || !password) {
+      Alert.alert('Error', 'Please enter email/username and password');
+      return;
+    }
+
     try {
-      const data = await api.auth.login(email, password);
+      const data = await api.auth.login(emailOrUsername, password);
       console.log('Login success', data);
       // Save auth info locally
       const authData = {
-        idToken: data.idToken,
-        refreshToken: data.refreshToken,
-        uid: data.localId || data.userId || null,
-        email: email
+        access_token: data.access_token,
+        token_type: data.token_type,
+        uid: data.user?._id || null,
+        email: data.user?.email || null,
+        username: data.user?.username || null
       };
       await AsyncStorage.setItem('auth', JSON.stringify(authData));
-      Alert.alert('Logged in', `Welcome!`);
+      // Alert.alert('Logged in', `Welcome ${data.user?.username ? '@' + data.user.username : data.user?.email}!`);
       navigation.navigate('MainTabs');
     } catch (e) {
       console.error('Login error', e);
@@ -32,8 +38,21 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sign in</Text>
-      <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} />
-      <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
+      <TextInput 
+        style={styles.input} 
+        placeholder="Email or Username" 
+        value={emailOrUsername} 
+        onChangeText={setEmailOrUsername}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <TextInput 
+        style={styles.input} 
+        placeholder="Password" 
+        secureTextEntry 
+        value={password} 
+        onChangeText={setPassword}
+      />
       <TouchableOpacity style={styles.button} onPress={handleLogin}>
         <Text style={styles.buttonText}>Login</Text>
       </TouchableOpacity>

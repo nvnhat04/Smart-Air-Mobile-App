@@ -3,7 +3,7 @@ API router initialization
 """
 from fastapi import APIRouter
 
-from .endpoints import auth, pm25, weather
+from .endpoints import auth, pm25, weather, location
 
 api_router = APIRouter()
 
@@ -15,3 +15,4 @@ api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
 # Include Weather endpoints
 api_router.include_router(weather.router, prefix="/weather", tags=["Weather"])
+api_router.include_router(location.router, prefix="/location", tags=["Location"])

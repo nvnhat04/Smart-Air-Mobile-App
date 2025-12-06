@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # By default, bind to localhost for security. 
     # To expose the server on all interfaces (e.g., for production), set HOST to "0.0.0.0" via environment variable or config file.
     # WARNING: Binding to "0.0.0.0" exposes the server on all network interfaces and may be a security risk in production.
-    HOST: str = "127.0.0.1"
+    HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = True
     RELOAD: bool = True
@@ -48,6 +48,15 @@ class Settings(BaseSettings):
         {"pm_min": 150.0, "pm_max": 250.0, "aqi_min": 201, "aqi_max": 300, "color": (143, 63, 151, 255),  "level": "Very Unhealthy"},
         {"pm_min": 250.0, "pm_max": 500.0, "aqi_min": 301, "aqi_max": 500, "color": (126, 0, 35, 255),    "level": "Hazardous"}
     ]
+    
+    # MongoDB Settings (load from .env)
+    MONGODB_URL: str = "mongodb://localhost:27017"  # Default fallback
+    MONGODB_DB_NAME: str = "smartair"
+    
+    # JWT Settings (load from .env - SECRET_KEY is required)
+    SECRET_KEY: str  # Must be set in .env file
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30 days
     
     class Config:
         case_sensitive = True

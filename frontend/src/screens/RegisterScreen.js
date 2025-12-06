@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import api from '../services/api';
 import { useNavigation } from '@react-navigation/native';
+import { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import api from '../services/api';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [gender, setGender] = useState('');
@@ -18,8 +19,14 @@ export default function RegisterScreen() {
   const navigation = useNavigation();
 
   const handleRegister = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Email and password are required');
+    if (!email || !username || !password) {
+      Alert.alert('Error', 'Email, username and password are required');
+      return;
+    }
+
+    // Validate username format
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      Alert.alert('Error', 'Username must be 3-20 characters and contain only letters, numbers, and underscores');
       return;
     }
 
@@ -38,11 +45,11 @@ export default function RegisterScreen() {
       // Remove undefined fields
       Object.keys(profile).forEach(key => profile[key] === undefined && delete profile[key]);
 
-      console.log('[RegisterScreen] Registering with profile:', profile);
-      const res = await api.auth.register(email, password, profile);
+      console.log('[RegisterScreen] Registering with username and profile:', username, profile);
+      const res = await api.auth.register(email, username, password, profile);
       console.log('[RegisterScreen] Register response:', res);
       
-      Alert.alert('Success', `Account created! User ID: ${res.uid}`);
+      Alert.alert('Success', `Account created! Username: @${res.user?.username || username}`);
       navigation.navigate('Login');
     } catch (e) {
       console.error('[RegisterScreen] Register error:', e);
@@ -64,11 +71,21 @@ export default function RegisterScreen() {
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
+        autoCapitalize="none"
         editable={!loading}
       />
       <TextInput
         style={styles.input}
-        placeholder="Password *"
+        placeholder="Username * (3-20 chars, letters, numbers, underscore)"
+        value={username}
+        onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!loading}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password * (min 6 characters)"
         secureTextEntry
         value={password}
         onChangeText={setPassword}

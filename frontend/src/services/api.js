@@ -1,149 +1,89 @@
 // API service helper for SmartAir backend
-// Location tracking only
+// Unified BASE_URL for all API calls (auth, location, pm25)
 
-// Backend URL resolution strategy (works across all developers' machines):
-// 1. Try environment variable REACT_APP_API_URL first (highest priority - set in .env.local)
-// 2. Try app.json extra.backendUrl (built into app bundle at build time)
-// 3. Try auto-detection from Expo manifest (if available on physical device)
-// 4. Try localhost fallback for web/emulator development
 import Constants from 'expo-constants';
 
-// PRIORITY 1: Environment variable (from .env.local - highest priority for development)
-const ENV_BASE = process.env.REACT_APP_API_URL;
+// URL resolution priority:
+// 1. Environment variable (highest priority)
+// 2. Auto-detection from Expo debuggerHost
+// 3. Config from app.json
+// 4. Fallback to Android Emulator localhost
 
-// PRIORITY 2: app.json config (embedded in app bundle)
+const ENV_BASE = process.env.API_BASE_URL_ANDROID;
+
 let CONFIG_BASE = Constants.expoConfig?.extra?.backendUrl || Constants.manifest?.extra?.backendUrl;
 if (CONFIG_BASE === 'AUTO_DISCOVER' || CONFIG_BASE === '') {
   CONFIG_BASE = null;
 }
 
-// Auth server URL from app.json (separate from backend URL)
-let CONFIG_AUTH_BASE = Constants.expoConfig?.extra?.authServerUrl || Constants.manifest?.extra?.authServerUrl;
-if (CONFIG_AUTH_BASE === 'AUTO_DISCOVER' || CONFIG_AUTH_BASE === '') {
-  CONFIG_AUTH_BASE = null;
-}
-
-// Try to detect the packager host (which runs on the same machine as the backend)
-// Expo Go sets debuggerHost automatically when connecting to the development server
+// Auto-detect from Expo debugger host
 let detectedBackendUrl = null;
-let detectedHost = null;
 try {
-  // Expo Go provides debuggerHost in the manifest
   const manifest = Constants.manifest || Constants.expoConfig || {};
   const expoConfig = Constants.expoConfig || {};
   
-  // Log available properties for debugging
   console.warn('[api.js] Expo Constants available:');
   if (manifest.debuggerHost) console.warn(`  manifest.debuggerHost: ${manifest.debuggerHost}`);
-  if (manifest.packagerPort) console.warn(`  manifest.packagerPort: ${manifest.packagerPort}`);
-  if (manifest.extra?.debuggerHost) console.warn(`  manifest.extra.debuggerHost: ${manifest.extra.debuggerHost}`);
-  if (expoConfig.extra?.debuggerHost) console.warn(`  expoConfig.extra.debuggerHost: ${expoConfig.extra.debuggerHost}`);
   
-  // Try multiple sources for debuggerHost
-  let debuggerHost = 
+  const debuggerHost = 
     manifest.debuggerHost || 
-    manifest.packagerPort || 
     manifest.extra?.debuggerHost ||
     expoConfig.extra?.debuggerHost ||
-    Constants.expoGoConfig?.debuggerHost ||
     null;
   
-  // Also try the connection info from expo-constants
-  if (!debuggerHost && Constants.executionEnvironment === 'standalone') {
-    // In standalone builds, try other methods
-    debuggerHost = Constants.manifest2?.extra?.expoGo?.debuggerHost;
-  }
-  
   if (debuggerHost) {
-    // Extract the host part (remove port if present)
-    // debuggerHost format: "192.168.1.2:8081" or "hostname:8081" or just "192.168.1.2"
-    let hostPart = debuggerHost.includes(':') ? debuggerHost.split(':')[0] : debuggerHost;
+    const hostPart = debuggerHost.includes(':') ? debuggerHost.split(':')[0] : debuggerHost;
     
-    // Skip localhost/127.0.0.1 - these won't work on physical devices
     if (hostPart && hostPart !== 'localhost' && hostPart !== '127.0.0.1' && !hostPart.startsWith('127.')) {
-      detectedHost = hostPart;
-      detectedBackendUrl = `http://${hostPart}:4000`;
-      console.warn(`[api.js] ✓ Auto-detected backend URL: ${detectedBackendUrl}`);
-    } else {
-      console.warn(`[api.js] ⚠ debuggerHost is localhost (${hostPart}), skipping auto-detection`);
+      detectedBackendUrl = `http://${hostPart}:8000`;
+      console.warn(`[api.js] ✓ Auto-detected backend: ${detectedBackendUrl}`);
     }
-  } else {
-    console.warn('[api.js] ✗ Could not auto-detect backend - no debuggerHost found');
-    console.warn('[api.js] Available Constants:', {
-      manifest: !!manifest,
-      expoConfig: !!expoConfig,
-      executionEnvironment: Constants.executionEnvironment
-    });
   }
 } catch (e) {
-  console.warn('[api.js] Failed to auto-detect packager host:', e.message);
+  console.warn('[api.js] Failed to auto-detect:', e.message);
 }
 
-// Resolve BASE_URL with priority: env > detected > config > localhost
-// Auto-detection (detected) is preferred over hardcoded config for network flexibility
-let BASE_URL = ENV_BASE || detectedBackendUrl || CONFIG_BASE || 'http://localhost:4000';
+// Single BASE_URL for all endpoints (port 8000)
+const DEFAULT_FALLBACK = 'http://10.0.2.2:8000';
+const DEPLOY_URL = ''; // Tắt ngrok để test local: 'https://78fe9b102ec3.ngrok-free.app'
+const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // IP máy tính trên WiFi
+const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
 
-console.warn(`[api.js] Initializing BASE_URL: ${BASE_URL}`);
-console.warn(`  priority: env=${ENV_BASE || 'not set'} > detected=${detectedBackendUrl || 'not set'} > config=${CONFIG_BASE || 'not set'} > localhost`);
+// console.warn(`[api.js] BASE_URL: ${BASE_URL}`);
+// console.warn(`  priority: deploy=${DEPLOY_URL || 'none'} > env=${ENV_BASE || 'none'} > detected=${detectedBackendUrl || 'none'} > config=${CONFIG_BASE || 'none'} > fallback=${DEFAULT_FALLBACK}`);
 
-// Warn if using localhost on a physical device
-if (BASE_URL.includes('localhost') && Constants.executionEnvironment !== 'bare') {
-  console.warn('[api.js] ⚠ WARNING: Using localhost - this will NOT work on a physical device!');
-  console.warn('[api.js] Please ensure Expo is running with --lan flag or set REACT_APP_API_URL environment variable');
-}
-
-// Calculate AUTH_BASE once - use same host as backend but port 8000
-let AUTH_BASE_URL;
-if (CONFIG_AUTH_BASE && CONFIG_AUTH_BASE !== 'AUTO_DISCOVER') {
-  // Explicit auth server URL provided
-  AUTH_BASE_URL = `${CONFIG_AUTH_BASE}/auth`;
-} else {
-  // Auto-detect: use same host as backend but port 8000
-  try {
-    // Use detected host if available, otherwise extract from BASE_URL
-    let hostForAuth;
-    if (detectedHost) {
-      // Use the detected host directly
-      hostForAuth = detectedHost;
-    } else if (detectedBackendUrl) {
-      const b = detectedBackendUrl.replace(/^https?:\/\//, '');
-      hostForAuth = b.includes(':') ? b.split(':')[0] : b;
-    } else {
-      const b = BASE_URL.replace(/^https?:\/\//, '');
-      hostForAuth = b.includes(':') ? b.split(':')[0] : b;
-      // Don't use localhost on physical devices
-      if (hostForAuth === 'localhost' || hostForAuth === '127.0.0.1') {
-        console.warn('[api.js] ⚠ Warning: Using localhost for auth server - this may not work on physical devices');
-      }
-    }
-    AUTH_BASE_URL = `http://${hostForAuth}:8000/auth`;
-  } catch (e) {
-    AUTH_BASE_URL = 'http://localhost:8000/auth';
-    console.warn('[api.js] ⚠ Error calculating AUTH_BASE, using localhost fallback');
-  }
-}
-console.warn(`[api.js] AUTH_BASE: ${AUTH_BASE_URL}`);
-console.warn(`  config=${CONFIG_AUTH_BASE || 'not set'} > auto-detected from ${detectedHost ? 'debuggerHost' : (detectedBackendUrl ? 'BASE_URL' : 'fallback')}`);
+// Export BASE_URL for use in other components (like MapWebView)
+export { BASE_URL };
 
 const api = {
   BASE_URL,
-  // Auth now lives on the FastAPI server (port 8000), under /auth/*
   get AUTH_BASE() {
-    return AUTH_BASE_URL;
+    return `${BASE_URL}/auth`;
   },
 
-  // POST /api/location
-  // Records user's current position when they open the app
-  saveLocation: async (userId, lat, lng, aqi, address) => {
-    const url = `${BASE_URL}/api/location`;
+  // POST /location/save
+  saveLocation: async (userId, lat, lng, aqi, address, pm25 = null) => {
+    const url = `${BASE_URL}/location/save`;
     console.warn(`[api.js] saveLocation: POST to ${url}`);
-    console.warn(`  userId=${userId}, lat=${lat}, lng=${lng}`);
+    console.warn(`  userId=${userId}, lat=${lat}, lng=${lng}, aqi=${aqi}, pm25=${pm25}`);
     try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) throw new Error('No auth token found. Please login first.');
+      
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) throw new Error('No JWT token found in auth data.');
+
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, lat, lng, aqi, address })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: userId, lat, lng, aqi, pm25, address })
       });
+      
       console.warn(`[api.js] saveLocation: Response status ${res.status}`);
       if (!res.ok) {
         const text = await res.text();
@@ -158,19 +98,120 @@ const api = {
     }
   },
 
-  // GET /api/location/history?userId=..
-  // Retrieves user's location history for analytics
-  getLocationHistory: async (userId) => {
-    const url = `${BASE_URL}/api/location/history?userId=${encodeURIComponent(userId)}`;
+  // GET /location/history?days=15&limit=100
+  getLocationHistory: async (days = 15, limit = 100) => {
+    const url = `${BASE_URL}/location/history?days=${days}&limit=${limit}`;
     console.warn(`[api.js] getLocationHistory: GET from ${url}`);
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) throw new Error('No auth token found. Please login first.');
+      
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) throw new Error('No JWT token found in auth data.');
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
       const data = await res.json();
-      console.warn(`[api.js] getLocationHistory: Success`, data);
+      console.warn(`[api.js] getLocationHistory: Success, got ${data.length} records`);
       return data;
     } catch (err) {
       console.error(`[api.js] getLocationHistory: Error: ${err.message}`);
+      throw err;
+    }
+  },
+
+  // GET /location/stats?days=15
+  getLocationStats: async (days = 15) => {
+    const url = `${BASE_URL}/location/stats?days=${days}`;
+    console.warn(`[api.js] getLocationStats: GET from ${url}`);
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) throw new Error('No auth token found. Please login first.');
+      
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) throw new Error('No JWT token found in auth data.');
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      console.warn(`[api.js] getLocationStats: Success`, data);
+      return data;
+    } catch (err) {
+      console.error(`[api.js] getLocationStats: Error: ${err.message}`);
+      throw err;
+    }
+  },
+
+  // GET /pm25/forecast?lat=21.0285&lon=105.8542&days=7
+  getPM25Forecast: async (lat, lon, days = 8) => {
+    const url = `${BASE_URL}/pm25/forecast?lat=${lat}&lon=${lon}&days=${days}`;
+    console.warn(`[api.js] getPM25Forecast: GET from ${url}`);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      console.warn(`[api.js] getPM25Forecast: Success, got ${data.forecast?.length || 0} days`);
+      return data;
+    } catch (err) {
+      console.error(`[api.js] getPM25Forecast: Error: ${err.message}`);
+      throw err;
+    }
+  },
+
+  // GET /pm25/point?lon=105.8542&lat=21.0285&date=20241206
+  getPM25Point: async (lat, lon, date = null) => {
+    const dateParam = date ? `&date=${date.replace(/-/g, '')}` : '';
+    const url = `${BASE_URL}/pm25/point?lon=${lon}&lat=${lat}${dateParam}`;
+    console.warn(`[api.js] getPM25Point: GET from ${url}`);
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      
+      const data = await res.json();
+      console.warn(`[api.js] getPM25Point: Success, AQI=${data.aqi}`);
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.error(`[api.js] getPM25Point: Timeout after 5 seconds`);
+        throw new Error('Timeout: Backend không phản hồi trong 5 giây');
+      }
+      console.error(`[api.js] getPM25Point: Error: ${err.message}`);
       throw err;
     }
   }
@@ -178,10 +219,11 @@ const api = {
 
 // Auth helpers
 api.auth = {
-  register: async (email, password, profile = {}) => {
+  register: async (email, username, password, profile = {}) => {
     /**
      * Register a new user with extended profile information.
      * @param {string} email - User email
+     * @param {string} username - Unique username (3-20 chars, alphanumeric + underscore)
      * @param {string} password - User password
      * @param {object} profile - User profile containing:
      *   - displayName: string (optional)
@@ -198,6 +240,7 @@ api.auth = {
     console.warn(`[api.js] auth.register -> POST ${url}`);
     console.warn(`[api.js] auth.register: profile fields:`, {
       email,
+      username,
       displayName: profile.displayName,
       gender: profile.gender,
       age: profile.age,
@@ -210,7 +253,7 @@ api.auth = {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, profile })
+        body: JSON.stringify({ email, username, password, profile })
       });
       if (!res.ok) {
         const text = await res.text();
@@ -232,14 +275,15 @@ api.auth = {
     }
   },
 
-  login: async (email, password) => {
+  login: async (emailOrUsername, password) => {
     const url = `${api.AUTH_BASE}/login`;
     console.warn(`[api.js] auth.login -> POST ${url}`);
+    console.warn(`[api.js] auth.login: identifier=${emailOrUsername}`);
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email_or_username: emailOrUsername, password })
       });
       if (!res.ok) {
         const text = await res.text();

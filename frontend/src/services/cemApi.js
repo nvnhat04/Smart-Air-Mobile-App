@@ -71,14 +71,88 @@ const fetchWithTimeout = async (url, options = {}, timeout = FETCH_TIMEOUT) => {
 };
 
 /**
+ * Parse lastFileContent để lấy giá trị PM2.5, nhiệt độ, độ ẩm, etc.
+ * Format: "PM-2.5\t75.42\tug/m3\t20251205152000\t00\r\n"
+ * @param {string} content - Nội dung text từ lastFileContent
+ * @returns {Object} Object chứa các giá trị đo được
+ */
+const parseLastFileContent = (content) => {
+  if (!content || typeof content !== 'string') {
+    return {};
+  }
+
+  const result = {};
+  const lines = content.split('\r\n').filter(line => line.trim());
+
+  lines.forEach(line => {
+    const parts = line.split('\t');
+    if (parts.length >= 2) {
+      const key = parts[0].trim();
+      const value = parseFloat(parts[1]);
+
+      if (!isNaN(value)) {
+        switch (key) {
+          case 'PM-2.5':
+          case 'PM2.5':
+            result.pm25 = value;
+            break;
+          case 'PM-10':
+          case 'PM10':
+            result.pm10 = value;
+            break;
+          case 'PM-1':
+          case 'PM1':
+            result.pm1 = value;
+            break;
+          case 'Temp':
+            result.temp = value;
+            break;
+          case 'RH':
+            result.humidity = value;
+            break;
+          case 'WinSpd':
+            result.windSpeed = value;
+            break;
+          case 'WinDir':
+            result.windDirection = value;
+            break;
+          case 'CO':
+            result.co = value;
+            break;
+          case 'NO2':
+            result.no2 = value;
+            break;
+          case 'SO2':
+            result.so2 = value;
+            break;
+          case 'O3':
+            result.o3 = value;
+            break;
+          case 'NO':
+            result.no = value;
+            break;
+          case 'NOx':
+            result.nox = value;
+            break;
+        }
+      }
+    }
+  });
+
+  return result;
+};
+
+/**
  * Fetch danh sách tất cả các trạm quan trắc môi trường
+ * Sử dụng endpoint mới: findByIsPublicAndStationTypeAndNullableProvinceId
+ * stationType=4: Trạm quan trắc không khí
  * @returns {Promise<Array>} Danh sách các trạm
  */
 export const fetchStations = async () => {
   try {
     console.log('🔄 Fetching stations from CEM API...');
     const response = await fetchWithTimeout(
-      `${CEM_API_BASE}/stations?size=200`,
+      `${CEM_API_BASE}/stations/search/findByIsPublicAndStationTypeAndNullableProvinceId?stationType=4&isPublic=true`,
       {
         method: 'GET',
         headers: {
@@ -116,6 +190,14 @@ export const fetchStations = async () => {
           }
         }
         
+        // Parse lastFileContent để lấy dữ liệu thời gian thực
+        const parsedData = station.lastFileContent 
+          ? parseLastFileContent(station.lastFileContent) 
+          : {};
+
+        // Tính AQI từ PM2.5 nếu có
+        const aqi = parsedData.pm25 ? calculateAQIFromPM25(parsedData.pm25) : null;
+
         return {
           id: station.id,
           name: stationName,
@@ -127,6 +209,20 @@ export const fetchStations = async () => {
           stationCode: station.stationCode || station.code,
           type: station.stationType?.name || 'Không rõ',
           status: station.status || 'active',
+          // Thêm dữ liệu thời gian thực từ lastFileContent
+          pm25: parsedData.pm25,
+          pm10: parsedData.pm10,
+          aqi: aqi,
+          baseAqi: aqi || 0,
+          temp: parsedData.temp,
+          humidity: parsedData.humidity,
+          windSpeed: parsedData.windSpeed,
+          windDirection: parsedData.windDirection,
+          co: parsedData.co,
+          no2: parsedData.no2,
+          so2: parsedData.so2,
+          o3: parsedData.o3,
+          timestamp: new Date().toISOString(),
         };
       });
     }
@@ -329,43 +425,13 @@ export const fetchStationsWithLatestData = async () => {
       return MOCK_STATIONS;
     }
     
-    // Nếu đang dùng mock data (có pm25/aqi sẵn), return luôn
-    if (stations[0]?.aqi !== undefined) {
-      console.log('ℹ️ Using mock data with built-in AQI values');
-      return stations;
-    }
+    console.log(`📍 Found ${stations.length} stations from API`);
 
-    // Lấy danh sách station IDs
-    const stationIds = stations.map(s => s.id).filter(Boolean);
-    console.log(`📍 Found ${stations.length} stations, fetching AQI data for ${stationIds.length} station IDs...`);
-
-    // Fetch AQI hour data
-    const latestDataMap = await fetchLatestAQIHourData(stationIds);
-
-    console.log(`📍 Found ${stations.length} stations`);
-    console.log(`📊 Found data for ${Object.keys(latestDataMap).length} stations`);
-
-    // Kết hợp dữ liệu
-    const stationsWithData = stations.map(station => {
-      const latestData = latestDataMap[station.id] || {};
-      
-      // Nếu không có AQI từ API, tạo mock AQI ngẫu nhiên cho demo
-      const hasRealAQI = latestData.aqi !== null && latestData.aqi !== undefined;
-      const mockAQI = hasRealAQI ? null : Math.floor(Math.random() * 150) + 30; // Random AQI từ 30-180
-      const finalAQI = hasRealAQI ? latestData.aqi : mockAQI;
-      
-      return {
-        ...station,
-        lon: station.lng, // Thêm lon để consistent với các component khác
-        pm25: latestData.pm25 || (mockAQI ? mockAQI * 0.45 : null), // Estimate PM2.5 from AQI
-        aqi: finalAQI,
-        baseAqi: finalAQI || 0, // For compatibility with old code
-        temp: latestData.temp || (20 + Math.floor(Math.random() * 10)), // Mock temp 20-30°C
-        humidity: latestData.humidity || (60 + Math.floor(Math.random() * 30)), // Mock humidity 60-90%
-        windSpeed: latestData.windSpeed || null,
-        timestamp: latestData.timestamp || new Date().toISOString(),
-      };
-    });
+    // Stations đã có dữ liệu PM2.5 và AQI từ lastFileContent, chỉ cần thêm lon field
+    const stationsWithData = stations.map(station => ({
+      ...station,
+      lon: station.lng, // Thêm lon để consistent với các component khác
+    }));
 
     // Lọc chỉ lấy các trạm có tọa độ hợp lệ
     const validStations = stationsWithData.filter(
