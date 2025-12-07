@@ -34,7 +34,7 @@ async def save_location(
         )
     
     # Create location record
-    vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
+    
     location_doc = {
         "user_id": payload.user_id,
         "latitude": payload.latitude,
@@ -42,7 +42,7 @@ async def save_location(
         "aqi": payload.aqi,
         "pm25": payload.pm25,
         "address": payload.address,
-        "timestamp": datetime.now(vn_tz)
+        "timestamp": datetime.now(timezone.utc)
     }
     
     # Insert into database
@@ -258,8 +258,7 @@ async def clear_location_history(
     query = {"user_id": user_id}
     
     if days:
-        vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
-        cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
         query["timestamp"] = {"$lt": cutoff_date}
     
     # Delete records
