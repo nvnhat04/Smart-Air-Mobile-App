@@ -1,7 +1,7 @@
 """
 Location tracking endpoints
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from app.core.security import get_current_user
@@ -34,6 +34,7 @@ async def save_location(
         )
     
     # Create location record
+    vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
     location_doc = {
         "user_id": payload.user_id,
         "latitude": payload.latitude,
@@ -41,7 +42,7 @@ async def save_location(
         "aqi": payload.aqi,
         "pm25": payload.pm25,
         "address": payload.address,
-        "timestamp": datetime.utcnow()
+        "timestamp": datetime.now(vn_tz)
     }
     
     # Insert into database
@@ -84,7 +85,8 @@ async def get_location_history(
         )
     
     # Calculate date range
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
+    cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
     
     # Query database
     cursor = db.locations.find({
@@ -130,7 +132,8 @@ async def get_user_location_history(
         )
     
     # Calculate date range
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
+    cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
     
     # Query database
     cursor = db.locations.find({
@@ -168,7 +171,8 @@ async def get_location_stats(
     user_id = current_user["user_id"]
     
     # Calculate date range
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
+    cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
     
     # Get all records for the period
     cursor = db.locations.find({
@@ -254,7 +258,8 @@ async def clear_location_history(
     query = {"user_id": user_id}
     
     if days:
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
+        cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
         query["timestamp"] = {"$lt": cutoff_date}
     
     # Delete records
