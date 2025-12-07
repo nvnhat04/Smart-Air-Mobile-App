@@ -121,7 +121,7 @@ const generateLeafletHTML = (baseUrl) => `
         // Sử dụng TiTiler server với AQI colormap từ BASE_URL
         const serverUrl = \`${baseUrl}\`;
         
-        const tileUrl = serverUrl + '/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi';
+        const tileUrl = serverUrl + '/pm25/tiles/{z}/{x}/{y}.png?date=' + dateParam + '&colormap_name=aqi&ngrok-skip-browser-warning=true';
         console.log('🗺️ Creating WMS layer with URL:', tileUrl.replace('{z}', '11').replace('{x}', '1626').replace('{y}', '901'));
         console.log('📍 Server URL:', serverUrl);
         console.log('📅 Date param:', dateParam);
@@ -497,14 +497,19 @@ export default function MapScreen() {
     if (selectedStation && selectedStation.id === 'user-gps-location' && selectedStation.lat && selectedStation.lng) {
       const saveUserLocation = async () => {
         try {
-          console.log('[MapScreen] Saving user GPS location:', selectedStation.name);
-          await saveCurrentLocation({
+          console.log('[MapScreen] 📍 Attempting to save user GPS location:', selectedStation.name);
+          const result = await saveCurrentLocation({
             aqi: selectedStation.aqi || selectedStation.baseAqi,
             address: selectedStation.address || selectedStation.name || 'Vị trí của bạn',
           });
-          console.log('[MapScreen] User GPS location saved successfully');
+          
+          if (result?.skipped) {
+            console.log(`[MapScreen] ⚠️ Location save skipped (${result.reason}): too soon or too close to last saved location`);
+          } else {
+            console.log('[MapScreen] ✅ User GPS location saved successfully');
+          }
         } catch (error) {
-          console.warn('[MapScreen] Failed to save user GPS location:', error);
+          console.warn('[MapScreen] ❌ Failed to save user GPS location:', error);
         }
       };
       
@@ -728,12 +733,19 @@ export default function MapScreen() {
       return selectedStation;
     }
     
-    // Otherwise, get detailed info from stationDetailsById
+    // Otherwise, use data from stationDetailsById (has status, color, advice calculated)
     const detailed = stationDetailsById[selectedStation.id];
-    if (!detailed) return selectedStation;
+    if (detailed) {
+      return detailed;
+    }
+    
+    // Fallback: calculate status, color, advice if not in stationDetailsById
+    const aqi = selectedStation.aqi || selectedStation.baseAqi || 0;
     return {
-      ...detailed,
       ...selectedStation,
+      status: getAQICategory(aqi),
+      color: getAQIColor(aqi),
+      advice: getHealthAdvice(aqi),
     };
   }, [selectedStation, stationDetailsById]);
 
@@ -934,7 +946,12 @@ export default function MapScreen() {
     };
   }, [searchQuery]);
 
-  const handleSelectSearchResult = (item) => {
+  const handleSelectSearchResult = async (item) => {
+    // Clear search UI
+    setSearchQuery(item.name);
+    setSearchResults([]);
+    setSearchError(null);
+
     // Center map tới địa điểm OSM
     if (webviewRef.current && item.lat && item.lng) {
       const js = `
@@ -944,9 +961,8 @@ export default function MapScreen() {
       webviewRef.current.injectJavaScript(js);
     }
 
-    setSearchQuery(item.name);
-    setSearchResults([]);
-    setSearchError(null);
+    // Fetch dữ liệu và hiển thị popup detail (giống như handleMapClick)
+    await handleMapClick(item.lat, item.lng);
   };
 
   // Inject stations vào WebView sau khi cemStations được load và WebView ready
@@ -1029,7 +1045,18 @@ export default function MapScreen() {
           try {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === 'station_click') {
-              setSelectedStation(data.payload);
+              // Get full station data from cemStations by id
+              const stationId = data.payload.id;
+              const fullStation = cemStations.find(s => s.id === stationId);
+              
+              if (fullStation) {
+                // Use full data from CEM API directly - don't recalculate AQI
+                // The AQI from cemStations is already correct from the API
+                setSelectedStation(fullStation);
+              } else {
+                // Fallback to basic data from WebView
+                setSelectedStation(data.payload);
+              }
             } else if (data.type === 'map_click') {
               // Handle map click - fetch data from backend
               const { lat, lng } = data.payload;
@@ -1127,7 +1154,7 @@ export default function MapScreen() {
       </View>
 
       {/* Zoom controls */}
-      <View style={styles.zoomControls}>
+      {/* <View style={styles.zoomControls}>
         <TouchableOpacity
           style={styles.zoomButton}
           onPress={() => {
@@ -1155,7 +1182,7 @@ export default function MapScreen() {
         >
           <Feather name="minus" size={20} color="#374151" />
         </TouchableOpacity>
-      </View>
+      </View> */}
 
       {/* Dropdown kết quả tìm kiếm OSM */}
       {searchQuery.trim().length > 0 && (searchResults.length > 0 || searchLoading || searchError) && (

@@ -15,6 +15,7 @@
       "supportsTablet": true
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./public/logo_smartair.png",
         "backgroundColor": "#ffffff"

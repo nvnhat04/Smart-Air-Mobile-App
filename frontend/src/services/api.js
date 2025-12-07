@@ -45,8 +45,9 @@ try {
 
 // Single BASE_URL for all endpoints (port 8000)
 const DEFAULT_FALLBACK = 'http://10.0.2.2:8000';
-const DEPLOY_URL = ''; // Tắt ngrok để test local: 'https://78fe9b102ec3.ngrok-free.app'
-const LOCAL_NETWORK_URL = process.env.LOCAL_NETWORK_URL; // IP máy tính trên WiFi
+const DEPLOY_URL = 'https://smart-air-mobile-app.onrender.com'; // Thay bằng Vercel URL sau khi deploy
+// Thay YOUR_WIFI_IP bằng IP máy tính của bạn (xem bằng lệnh ipconfig)
+const LOCAL_NETWORK_URL = ''; // VD: 192.168.1.10, 10.0.0.5, etc.
 const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
 
 // console.warn(`[api.js] BASE_URL: ${BASE_URL}`);
@@ -80,6 +81,7 @@ const api = {
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
+   
         },
         body: JSON.stringify({ user_id: userId, lat, lng, aqi, pm25, address })
       });
@@ -112,7 +114,10 @@ const api = {
       if (!token) throw new Error('No JWT token found in auth data.');
 
       const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`
+    
+        }
       });
       
       if (!res.ok) {
@@ -142,7 +147,9 @@ const api = {
       if (!token) throw new Error('No JWT token found in auth data.');
 
       const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!res.ok) {
@@ -163,7 +170,11 @@ const api = {
     const url = `${BASE_URL}/pm25/forecast?lat=${lat}&lon=${lon}&days=${days}`;
     console.warn(`[api.js] getPM25Forecast: GET from ${url}`);
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`HTTP ${res.status}: ${text}`);
@@ -191,7 +202,7 @@ const api = {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         signal: controller.signal,
       });
@@ -252,7 +263,9 @@ api.auth = {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ email, username, password, profile })
       });
       if (!res.ok) {
@@ -288,6 +301,7 @@ api.auth = {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
         },
         signal: controller.signal,
       });
@@ -326,7 +340,10 @@ api.auth = {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ email_or_username: emailOrUsername, password })
       });
       if (!res.ok) {

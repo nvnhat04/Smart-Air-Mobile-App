@@ -410,6 +410,75 @@ export const fetchStationDataByDate = async (stationId, date) => {
 };
 
 /**
+ * Fetch dữ liệu 7 ngày tiếp theo cho một trạm cụ thể
+ * @param {string} stationId - ID của trạm
+ * @returns {Promise<Array>} Mảng dữ liệu 7 ngày
+ */
+export const fetchStation7DayForecast = async (stationId) => {
+  try {
+    console.log(`🔄 Fetching 7-day data for station ${stationId}...`);
+    
+    // Tạo mảng 7 ngày từ hôm nay
+    const today = new Date();
+    const dates = [];
+    const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      
+      const dayOfWeek = date.getDay();
+      const dateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      dates.push({
+        date: dateStr,
+        label: daysShort[dayOfWeek],
+        isoDate,
+        dateKey: isoDate.replace(/-/g, ''),
+      });
+    }
+    
+    // Fetch dữ liệu cho từng ngày (parallel)
+    const dataPromises = dates.map(async (dateInfo) => {
+      try {
+        const result = await fetchStationDataByDate(stationId, dateInfo.isoDate);
+        return {
+          ...dateInfo,
+          aqi: result?.aqi || null,
+          pm25: result?.pm25 || null,
+          temp: result?.temp || null,
+          humidity: result?.humidity || null,
+          wind_speed: result?.windSpeed || null,
+          hasData: result !== null,
+        };
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch data for ${dateInfo.isoDate}:`, error);
+        return {
+          ...dateInfo,
+          aqi: null,
+          pm25: null,
+          temp: null,
+          humidity: null,
+          wind_speed: null,
+          hasData: false,
+        };
+      }
+    });
+    
+    const results = await Promise.all(dataPromises);
+    
+    const daysWithData = results.filter(r => r.hasData).length;
+    console.log(`✅ Station ${stationId}: ${daysWithData}/7 days have data`);
+    
+    return results;
+  } catch (error) {
+    console.error('❌ Error fetching station 7-day data:', error);
+    return [];
+  }
+};
+
+/**
  * Kết hợp dữ liệu trạm với dữ liệu latest AQI
  * @returns {Promise<Array>} Mảng các trạm đã có dữ liệu AQI
  */

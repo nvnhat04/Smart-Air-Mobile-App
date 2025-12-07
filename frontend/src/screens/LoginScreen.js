@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import api from '../services/api';
 
 export default function LoginScreen() {
@@ -10,15 +10,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigation = useNavigation();
 
   const handleLogin = async () => {
     if (!emailOrUsername || !password) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email/username và mật khẩu');
+      setError('Vui lòng nhập email/username và mật khẩu');
       return;
     }
 
     setLoading(true);
+    setError(''); // Clear previous error
     try {
       const data = await api.auth.login(emailOrUsername, password);
       console.log('Login success', data);
@@ -34,7 +36,7 @@ export default function LoginScreen() {
       navigation.navigate('MainTabs');
     } catch (e) {
       console.error('Login error', e);
-      Alert.alert('Đăng nhập thất bại', e.message || String(e));
+      setError(e.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -97,6 +99,14 @@ export default function LoginScreen() {
               />
             </TouchableOpacity>
           </View>
+
+          {/* Error Message */}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Feather name="alert-circle" size={16} color="#dc2626" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity 
             style={[styles.button, loading && styles.buttonDisabled]} 
@@ -192,6 +202,22 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 8,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
   },
   button: { 
     backgroundColor: '#3b82f6',

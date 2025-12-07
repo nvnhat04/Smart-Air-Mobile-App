@@ -14,6 +14,8 @@ import api from '../services/api';
 
 const LOCATION_TRACKING_KEY = '@location_tracking';
 const TRACKING_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+const MIN_SAVE_INTERVAL = 30 * 60 * 1000; // 30 minutes - minimum time between saves
+const MIN_DISTANCE_THRESHOLD = 100; // 100 meters - minimum distance to trigger new save
 
 // Helper để tính AQI từ PM2.5 (approximation)
 const calculateAQI = (pm25) => {
@@ -44,19 +46,67 @@ const getAddressFromCoords = async (latitude, longitude) => {
   return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 };
 
-// Lưu vị trí vào server
-const saveLocationToServer = async (userId, latitude, longitude, aqi = null, address = null, pm25 = null) => {
+// Tính khoảng cách giữa 2 tọa độ (Haversine formula) - đơn vị: meters
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+};
+
+// Lưu vị trí vào server với anti-spam logic
+const saveLocationToServer = async (userId, latitude, longitude, aqi = null, address = null, pm25 = null, forceCheck = true) => {
   try {
     if (!userId) {
       console.warn('[useLocationTracking] No userId, skipping save');
       return null;
     }
 
+    // Anti-spam check: kiểm tra vị trí và thời gian lần lưu trước
+    if (forceCheck) {
+      try {
+        const trackingDataStr = await AsyncStorage.getItem(LOCATION_TRACKING_KEY);
+        if (trackingDataStr) {
+          const trackingData = JSON.parse(trackingDataStr);
+          const { lastSaveTime, lastLat, lastLng } = trackingData;
+          
+          const now = Date.now();
+          const timeSinceLastSave = now - (lastSaveTime || 0);
+          
+          // Kiểm tra thời gian: phải cách ít nhất MIN_SAVE_INTERVAL
+          if (timeSinceLastSave < MIN_SAVE_INTERVAL) {
+            console.log(`[useLocationTracking] ⚠️ Spam prevention: Only ${Math.round(timeSinceLastSave / 1000)}s since last save (min: ${MIN_SAVE_INTERVAL / 1000}s)`);
+            return { skipped: true, reason: 'time_threshold' };
+          }
+          
+          // Kiểm tra khoảng cách: phải cách ít nhất MIN_DISTANCE_THRESHOLD
+          if (lastLat && lastLng) {
+            const distance = calculateDistance(lastLat, lastLng, latitude, longitude);
+            if (distance < MIN_DISTANCE_THRESHOLD) {
+              console.log(`[useLocationTracking] ⚠️ Spam prevention: Only ${Math.round(distance)}m from last location (min: ${MIN_DISTANCE_THRESHOLD}m)`);
+              return { skipped: true, reason: 'distance_threshold' };
+            }
+          }
+        }
+      } catch (checkError) {
+        console.warn('[useLocationTracking] Failed to check spam prevention:', checkError);
+        // Continue with save even if check fails
+      }
+    }
+
     const finalAddress = address || await getAddressFromCoords(latitude, longitude);
     const finalAqi = aqi !== null ? aqi : 75; // Default AQI if not provided
     const finalPm25 = pm25 !== null ? pm25 : (finalAqi ? (finalAqi * 0.6) : 45); // Approximate PM2.5 from AQI
 
-    console.log('[useLocationTracking] Saving location:', {
+    console.log('[useLocationTracking] ✅ Saving location:', {
       userId,
       lat: latitude,
       lng: longitude,
@@ -67,6 +117,16 @@ const saveLocationToServer = async (userId, latitude, longitude, aqi = null, add
 
     const result = await api.saveLocation(userId, latitude, longitude, finalAqi, finalAddress, finalPm25);
     console.log('[useLocationTracking] Location saved successfully:', result);
+    
+    // Cập nhật thông tin lần lưu gần nhất
+    await AsyncStorage.setItem(
+      LOCATION_TRACKING_KEY,
+      JSON.stringify({
+        lastSaveTime: Date.now(),
+        lastLat: latitude,
+        lastLng: longitude
+      })
+    );
     
     return result;
   } catch (error) {
@@ -126,15 +186,13 @@ export const useLocationTracking = (enabled = true) => {
       // Tính AQI nếu có PM2.5 trong additionalData
       const { aqi, address, pm25 } = additionalData;
 
-      // Lưu vào server
-      const result = await saveLocationToServer(userId, latitude, longitude, aqi, address, pm25);
+      // Lưu vào server (với spam check)
+      const result = await saveLocationToServer(userId, latitude, longitude, aqi, address, pm25, true);
 
-      // Cập nhật last save time
-      lastSaveTimeRef.current = Date.now();
-      await AsyncStorage.setItem(
-        LOCATION_TRACKING_KEY,
-        JSON.stringify({ lastSaveTime: lastSaveTimeRef.current })
-      );
+      // Chỉ cập nhật lastSaveTimeRef nếu thực sự lưu thành công (không bị skip)
+      if (result && !result.skipped) {
+        lastSaveTimeRef.current = Date.now();
+      }
 
       return result;
     } catch (error) {

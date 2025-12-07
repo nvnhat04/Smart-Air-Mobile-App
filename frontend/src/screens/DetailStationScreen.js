@@ -65,6 +65,8 @@ export default function DetailStationScreen() {
   // Fetch forecast data from server
   useEffect(() => {
     const fetchForecastData = async () => {
+      // Fetch 6 ngày tiếp theo từ TiTiler (ngày 1-6)
+      // Day[0] sẽ dùng dữ liệu thực từ CEM (station.aqi, station.pm25, etc.)
       if (!station?.lat || !station?.lon) {
         console.log('⚠️ No coordinates available for forecast');
         setLoading(false);
@@ -73,10 +75,9 @@ export default function DetailStationScreen() {
 
       try {
         setLoading(true);
-        console.log('🔄 Fetching 7-day forecast for:', station.lat, station.lon);
+        const isRealStation = station?.id && station.id !== 'custom-point' && station.id !== 'user-gps-location';
+        console.log(`🔄 Fetching 7-day forecast from TiTiler for ${isRealStation ? 'station' : 'custom point'}:`, station.name || 'Unknown');
         
-        // Lấy API URL từ config
-        // const baseURL = config.API_BASE_URL[Platform.OS] || config.API_BASE_URL.android;
         const url = `${BASE_URL}/pm25/forecast?lat=${station.lat}&lon=${station.lon}&days=7`;
         
         console.log('🔗 Forecast URL:', url);
@@ -94,20 +95,39 @@ export default function DetailStationScreen() {
         console.log('📊 Days with data:', data.daysWithData, '/', data.totalDays);
 
         if (data.forecast && data.forecast.length > 0) {
-          // Format data với weather thật từ Open-Meteo
-          const weeklyData = data.forecast.map(item => ({
+          let weeklyData = data.forecast.map(item => ({
             date: item.date,
             label: item.dayOfWeek,
             aqi: item.aqi || null,
             pm25: item.pm25 || null,
-            temp: item.temp || null, // Nhiệt độ thật từ Open-Meteo
+            temp: item.temp || null,
             temp_max: item.temp_max || null,
             temp_min: item.temp_min || null,
-            humidity: item.humidity || null, // Độ ẩm thật
-            wind_speed: item.wind_speed || null, // Tốc độ gió thật
+            humidity: item.humidity || null,
+            wind_speed: item.wind_speed || null,
             dateKey: item.dateKey,
             hasData: item.hasData,
           }));
+
+          // Nếu là trạm thật (không phải custom point), override day[0] với dữ liệu CEM
+          if (isRealStation && weeklyData.length > 0) {
+            console.log('🔄 Replacing day[0] with real CEM station data');
+            const temp = station.temp || weeklyData[0].temp;
+            weeklyData[0] = {
+              ...weeklyData[0], // Giữ date, label, dateKey
+              aqi: station.aqi || station.baseAqi || weeklyData[0].aqi,
+              pm25: station.pm25 || weeklyData[0].pm25,
+              temp: temp ? Math.round(temp) : temp,
+              humidity: station.humidity || weeklyData[0].humidity,
+              wind_speed: station.windSpeed || weeklyData[0].wind_speed,
+              hasData: true, // Station luôn có data
+            };
+            console.log('✅ Day[0] updated with CEM data:', {
+              aqi: weeklyData[0].aqi,
+              pm25: weeklyData[0].pm25,
+              temp: weeklyData[0].temp
+            });
+          }
 
           setRealtimeData({
             weekly: weeklyData,
@@ -130,7 +150,7 @@ export default function DetailStationScreen() {
     };
 
     fetchForecastData();
-  }, [station?.lat, station?.lon]);
+  }, [station?.lat, station?.lon, station?.aqi, station?.pm25, station?.temp, station?.humidity]);
 
   const data = useMemo(() => {
     console.log('🔍 Recalculating data with userGroup:', userGroup);
@@ -156,13 +176,14 @@ export default function DetailStationScreen() {
     
     // Calculate pm25 as number
     const pm25Value = latestData?.pm25 || station.pm25 || (currentAqi * 0.6);
+    const tempValue = latestData?.temp || station.temp || 28;
     
     const result = {
       ...station, // Spread station FIRST
       wind: latestData?.wind_speed?.toFixed(1) || latestData?.windSpeed?.toFixed(1) || station.windSpeed?.toFixed(1) || station.wind || '5.0',
       pm25: pm25Value, // Keep as number for UI formatting
       humidity: latestData?.humidity || station.humidity || 70,
-      temp: latestData?.temp || station.temp || 28,
+      temp: Math.round(tempValue),
       aqi: currentAqi,
       advice: healthAdvice, // Override advice LAST
     };
@@ -559,7 +580,7 @@ export default function DetailStationScreen() {
                   )}
                   {selectedPoint.temp && (
                     <Text style={styles.tooltipDetail}>
-                      🌡️ {selectedPoint.temp}°C
+                      🌡️ {Math.round(selectedPoint.temp)}°C
                     </Text>
                   )}
                   {selectedPoint.humidity && (
@@ -634,7 +655,7 @@ export default function DetailStationScreen() {
                     <Text style={styles.forecastDay}>{item.label}</Text>
                     <Text style={styles.forecastDate}>{item.date}</Text>
                     <Text style={styles.forecastTemp}>
-                      {hasData ? `${item.temp}°C` : 'N/A'}
+                      {hasData ? `${Math.round(item.temp)}°C` : 'N/A'}
                     </Text>
                     <View
                       style={[

@@ -36,6 +36,7 @@ export default function RootTabs() {
           height: 65,
           paddingBottom: 14,
           paddingTop: 8,
+          bottom: 10,
         },
       }}
       initialRouteName="Map"

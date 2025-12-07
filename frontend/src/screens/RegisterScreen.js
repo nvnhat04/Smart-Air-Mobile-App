@@ -18,26 +18,28 @@ export default function RegisterScreen() {
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigation = useNavigation();
 
   const handleRegister = async () => {
     if (!email || !username || !password) {
-      Alert.alert('Lỗi', 'Email, username và mật khẩu là bắt buộc');
+      setError('Email, username và mật khẩu là bắt buộc');
       return;
     }
 
     // Validate username format
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-      Alert.alert('Lỗi', 'Username phải có 3-20 ký tự và chỉ chứa chữ, số, gạch dưới');
+      setError('Username phải có 3-20 ký tự và chỉ chứa chữ, số, gạch dưới');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
+      setError('Mật khẩu phải có ít nhất 6 ký tự');
       return;
     }
 
     setLoading(true);
+    setError(''); // Clear previous error
     try {
       const profile = {
         displayName: displayName || undefined,
@@ -60,7 +62,7 @@ export default function RegisterScreen() {
       navigation.navigate('Login');
     } catch (e) {
       console.error('[RegisterScreen] Register error:', e);
-      Alert.alert('Đăng ký thất bại', e.message || String(e));
+      setError(e.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -241,6 +243,14 @@ export default function RegisterScreen() {
           </View>
         </View>
 
+        {/* Error Message */}
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Feather name="alert-circle" size={16} color="#dc2626" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
         {/* Submit button */}
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -346,6 +356,22 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 8,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
   },
   pickerContainer: {
     paddingRight: 8,

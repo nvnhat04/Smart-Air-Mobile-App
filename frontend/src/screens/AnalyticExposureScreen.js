@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocationTracking } from '../hooks/useLocationTracking';
 import api from '../services/api';
@@ -86,7 +86,7 @@ const generateAnalyticsData = () => {
 export default function AnalyticExposureScreen() {
   const { getLocationHistory } = useLocationTracking(true);
   const [historyData, setHistoryData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false - only load when needed
   const [selectedIdx, setSelectedIdx] = useState(7);
   const [selectedRadius, setSelectedRadius] = useState(100);
   const [showRadiusMenu, setShowRadiusMenu] = useState(false);
@@ -100,50 +100,89 @@ export default function AnalyticExposureScreen() {
   const [escapeDestinations, setEscapeDestinations] = useState([]); // Destinations with real AQI
   const [loadingDestinations, setLoadingDestinations] = useState(false);
   const [destinationsLoaded, setDestinationsLoaded] = useState(false); // Track if already loaded
+  const [overviewLoaded, setOverviewLoaded] = useState(false); // Track overview tab loaded
+  const [historyLoaded, setHistoryLoaded] = useState(false); // Track history tab loaded
   
-  // Load location history khi component mount (7 ngày)
-  useEffect(() => {
-    const loadHistory = async () => {
-      setLoading(true);
-      try {
-        const history = await getLocationHistory(7); // Chỉ lấy 7 ngày
-        setHistoryData(history);
-        console.log('[AnalyticExposureScreen] Loaded 7-day history:', history.length, 'records');
-        
-        // Call API to get location stats
-        try {
-          const stats = await api.getLocationStats(7);
-          setLocationStats(stats);
-          console.log('[AnalyticExposureScreen] Location stats:', stats);
-        } catch (statsError) {
-          console.warn('[AnalyticExposureScreen] Failed to load stats:', statsError.message);
-        }
-        
-        // Lấy vị trí gần nhất của user từ history
-        if (history.length > 0) {
-          const latestLocation = history[0]; // History đã sorted theo timestamp giảm dần
-          setUserLocation({
-            name: latestLocation.address || 'Vị trí của bạn',
-            address: latestLocation.address,
-            aqi: latestLocation.aqi,
-            latitude: latestLocation.latitude,
-            longitude: latestLocation.longitude,
-          });
-          console.log('[AnalyticExposureScreen] User location set from history:', latestLocation.address);
-        }
-        
-        // Process history với API PM2.5 forecast
-        const processed = await processHistory(history);
-        setAnalyticsData(processed);
-      } catch (error) {
-        console.error('[AnalyticExposureScreen] Failed to load history:', error);
-      } finally {
-        setLoading(false);
+  // Load location history - only basic data, no forecast yet
+  const loadHistoryBasic = useCallback(async () => {
+    try {
+      const history = await getLocationHistory(7); // Chỉ lấy 7 ngày
+      setHistoryData(history);
+      console.log('[AnalyticExposureScreen] Loaded 7-day history:', history.length, 'records');
+      
+      // Lấy vị trí gần nhất của user từ history
+      if (history.length > 0) {
+        const latestLocation = history[0]; // History đã sorted theo timestamp giảm dần
+        setUserLocation({
+          name: latestLocation.address || 'Vị trí của bạn',
+          address: latestLocation.address,
+          aqi: latestLocation.aqi,
+          latitude: latestLocation.latitude,
+          longitude: latestLocation.longitude,
+        });
+        console.log('[AnalyticExposureScreen] User location set from history:', latestLocation.address);
       }
-    };
-    
-    loadHistory();
+      
+      setHistoryLoaded(true);
+    } catch (error) {
+      console.error('[AnalyticExposureScreen] Failed to load history:', error);
+    }
   }, [getLocationHistory]);
+
+  // Load overview data with forecast (lazy loaded when overview tab is active)
+  const loadOverviewData = useCallback(async () => {
+    if (overviewLoaded) return; // Already loaded
+    
+    setLoading(true);
+    try {
+      // Call API to get location stats
+      try {
+        const stats = await api.getLocationStats(7);
+        setLocationStats(stats);
+        console.log('[AnalyticExposureScreen] Location stats:', stats);
+      } catch (statsError) {
+        console.warn('[AnalyticExposureScreen] Failed to load stats:', statsError.message);
+      }
+      
+      // Process history với API PM2.5 forecast
+      // forceRefresh = false: sử dụng cache cho data quá khứ, chỉ reload forecast
+      const processed = await processHistory(historyData, false);
+      setAnalyticsData(processed);
+      setOverviewLoaded(true);
+    } catch (error) {
+      console.error('[AnalyticExposureScreen] Failed to load overview:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [historyData, overviewLoaded]);
+
+  // Manual reload function for history tab
+  const reloadHistory = useCallback(async () => {
+    setLoading(true);
+    try {
+      await loadHistoryBasic();
+      // If overview was loaded, reload it too
+      if (overviewLoaded) {
+        setOverviewLoaded(false);
+        await loadOverviewData();
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [loadHistoryBasic, loadOverviewData, overviewLoaded]);
+
+  // Initial load - only basic history data
+  useEffect(() => {
+    loadHistoryBasic();
+  }, [loadHistoryBasic]);
+
+  // Lazy load data khi switch tab
+  useEffect(() => {
+    if (activeTab === 'overview' && !overviewLoaded && historyData.length > 0) {
+      console.log('[AnalyticExposureScreen] Lazy loading overview data...');
+      loadOverviewData();
+    }
+  }, [activeTab, overviewLoaded, historyData, loadOverviewData]);
 
   // Calculate distance between two coordinates (Haversine formula)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -254,85 +293,80 @@ export default function AnalyticExposureScreen() {
     const loadDestinationsAQI = async () => {
       setLoadingDestinations(true);
       try {
-        // Limit concurrent requests to 3 at a time to avoid overwhelming the server
-        const batchSize = 3;
-        const results = [];
+        // Optimize: Load all destinations in parallel (no batching)
+        console.log('[AnalyticExposureScreen] Loading all destinations in parallel...');
         
-        for (let i = 0; i < baseDestinations.length; i += batchSize) {
-          const batch = baseDestinations.slice(i, i + batchSize);
-          const batchResults = await Promise.all(
-            batch.map(async (dest) => {
-              try {
-                // Calculate distance and drive time
-                const distance = Math.round(calculateDistance(
-                  userLocation.latitude,
-                  userLocation.longitude,
-                  dest.lat,
-                  dest.lon
-                ));
-                const driveTime = calculateDriveTime(distance);
+        const results = await Promise.all(
+          baseDestinations.map(async (dest) => {
+            try {
+              // Calculate distance and drive time
+              const distance = Math.round(calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                dest.lat,
+                dest.lon
+              ));
+              const driveTime = calculateDriveTime(distance);
 
-                // Use forecast API only (includes current data in response)
-                const forecastData = await api.getPM25Forecast(dest.lat, dest.lon, 3);
-                
-                // Get forecast for 48 hours from now
-                const now = new Date();
-                const target48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-                const targetDateStr = target48h.toISOString().split('T')[0];
-                
-                // Get current data (first item in forecast)
-                const currentForecast = forecastData?.forecast?.[0];
-                const currentAqi = currentForecast?.aqi || 0;
-                
-                // Find the forecast for 48h
-                const forecastFor48h = forecastData?.forecast?.find(f => f.date === targetDateStr);
-                
-                let aqi48h = currentAqi;
-                let pm25_48h = currentForecast?.pm25 || 0;
-                let hasForecast = false;
-                
-                if (forecastFor48h && forecastFor48h.aqi > 0) {
-                  aqi48h = forecastFor48h.aqi;
-                  pm25_48h = forecastFor48h.pm25;
-                  hasForecast = true;
-                }
-                
-                return {
-                  ...dest,
-                  aqi: aqi48h,
-                  pm25: pm25_48h,
-                  currentAqi,
-                  hasForecast,
-                  distance,
-                  driveTime,
-                  temp: currentForecast?.weather?.temp || 20,
-                  weatherType: currentForecast?.weather?.main === 'Clear' ? 'sun' : 'cloud',
-                };
-              } catch (error) {
-                console.error(`[AnalyticExposureScreen] Failed to load ${dest.name}:`, error.message);
-                // Return with minimal data on error
-                const distance = Math.round(calculateDistance(
-                  userLocation.latitude,
-                  userLocation.longitude,
-                  dest.lat,
-                  dest.lon
-                ));
-                return {
-                  ...dest,
-                  aqi: 0,
-                  pm25: 0,
-                  currentAqi: 0,
-                  hasForecast: false,
-                  distance,
-                  driveTime: calculateDriveTime(distance),
-                  temp: 20,
-                  weatherType: 'cloud',
-                };
+              // Use forecast API only (includes current data in response)
+              const forecastData = await api.getPM25Forecast(dest.lat, dest.lon, 3);
+              
+              // Get forecast for 48 hours from now
+              const now = new Date();
+              const target48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+              const targetDateStr = target48h.toISOString().split('T')[0];
+              
+              // Get current data (first item in forecast)
+              const currentForecast = forecastData?.forecast?.[0];
+              const currentAqi = currentForecast?.aqi || 0;
+              
+              // Find the forecast for 48h
+              const forecastFor48h = forecastData?.forecast?.find(f => f.date === targetDateStr);
+              
+              let aqi48h = currentAqi;
+              let pm25_48h = currentForecast?.pm25 || 0;
+              let hasForecast = false;
+              
+              if (forecastFor48h && forecastFor48h.aqi > 0) {
+                aqi48h = forecastFor48h.aqi;
+                pm25_48h = forecastFor48h.pm25;
+                hasForecast = true;
               }
-            })
-          );
-          results.push(...batchResults);
-        }
+              
+              return {
+                ...dest,
+                aqi: aqi48h,
+                pm25: pm25_48h,
+                currentAqi,
+                hasForecast,
+                distance,
+                driveTime,
+                temp: currentForecast?.weather?.temp || 20,
+                weatherType: currentForecast?.weather?.main === 'Clear' ? 'sun' : 'cloud',
+              };
+            } catch (error) {
+              console.error(`[AnalyticExposureScreen] Failed to load ${dest.name}:`, error.message);
+              // Return with minimal data on error
+              const distance = Math.round(calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                dest.lat,
+                dest.lon
+              ));
+              return {
+                ...dest,
+                aqi: 0,
+                pm25: 0,
+                currentAqi: 0,
+                hasForecast: false,
+                distance,
+                driveTime: calculateDriveTime(distance),
+                temp: 20,
+                weatherType: 'cloud',
+              };
+            }
+          })
+        );
 
         console.log('[AnalyticExposureScreen] Loaded destinations:', results.length, 'total');
         console.log('[AnalyticExposureScreen] With forecast:', results.filter(d => d.hasForecast).length);
@@ -979,6 +1013,13 @@ export default function AnalyticExposureScreen() {
                 {dateFilter === 'all' && ` • Tất cả (${historyData.length} tổng)`}
               </Text>
             </View>
+            <TouchableOpacity
+              style={styles.reloadButton}
+              onPress={reloadHistory}
+              activeOpacity={0.7}
+            >
+              <Feather name="refresh-cw" size={18} color="#1d4ed8" />
+            </TouchableOpacity>
           </View>
 
           {/* Date Filter */}
@@ -1055,16 +1096,67 @@ export default function AnalyticExposureScreen() {
             </View>
           ) : (
             filteredHistoryData.map((item, index) => {
-              const date = new Date(item.timestamp);
-              const dateStr = date.toLocaleDateString('vi-VN', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              });
-              const timeStr = date.toLocaleTimeString('vi-VN', {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              // Timestamp from server: "2025-12-07T13:08:25.378251+07:00" (new format with timezone)
+              // or "2025-11-30T14:25:59.106000" (old format without timezone - UTC)
+              const timestampStr = item.timestamp;
+              let dateStr = '';
+              let timeStr = '';
+              
+              if (timestampStr && timestampStr.includes('T')) {
+                const [datePart, timePartFull] = timestampStr.split('T');
+                const [year, month, day] = datePart.split('-');
+                dateStr = `${day}/${month}/${year}`;
+                
+                // Check if timestamp has timezone info (+07:00 or -XX:XX)
+                const hasTimezone = timePartFull.includes('+') || (timePartFull.match(/-/g) || []).length > 0;
+                
+                if (hasTimezone) {
+                  // New format with timezone: "13:08:25.378251+07:00"
+                  // Remove timezone: split by + or - (for negative timezones)
+                  let timePart = timePartFull;
+                  if (timePart.includes('+')) {
+                    timePart = timePart.split('+')[0];
+                  } else if (timePart.lastIndexOf('-') > 0) {
+                    timePart = timePart.substring(0, timePart.lastIndexOf('-'));
+                  }
+                  
+                  // Remove milliseconds if present
+                  if (timePart.includes('.')) {
+                    timePart = timePart.split('.')[0];
+                  }
+                  
+                  const [hour, minute] = timePart.split(':');
+                  timeStr = `${hour}:${minute}`;
+                } else {
+                  // Old format without timezone (UTC): "14:25:59.106000"
+                  // Need to add 7 hours for Vietnam time
+                  let timePart = timePartFull;
+                  if (timePart.includes('.')) {
+                    timePart = timePart.split('.')[0];
+                  }
+                  
+                  const [hour, minute, second] = timePart.split(':');
+                  const vnDate= new Date(`${datePart}T${timePart}Z`); // Parse as UTC
+                  // const  = new Date(utcDate.getTime()); // Add 7 hours
+                  // console.log('Original UTC Date:', vnDate.toISOString());
+                  // vnDate.setHours(vnDate.getHours() + 7);
+                  // console.log('Converted VN Date:', vnDate.toISOString());
+                  const vnHour = vnDate.getHours().toString().padStart(2, '0');
+                  const vnMinute = vnDate.getMinutes().toString().padStart(2, '0');
+                  timeStr = `${vnHour}:${vnMinute}`;
+                  // console.log('Converted VN Time:', timeStr);
+                  // Update dateStr in case it changed after adding 7 hours
+                  const vnDay = vnDate.getDate().toString().padStart(2, '0');
+                  const vnMonth = (vnDate.getMonth() + 1).toString().padStart(2, '0');
+                  const vnYear = vnDate.getFullYear();
+                  dateStr = `${vnDay}/${vnMonth}/${vnYear}`;
+                }
+              } else {
+                // Fallback to Date parsing
+                const date = new Date(timestampStr);
+                dateStr = date.toLocaleDateString('vi-VN');
+                timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+              }
               
               return (
                 <View key={`${item.timestamp}-${index}`} style={styles.historyCard}>
@@ -1277,6 +1369,14 @@ const styles = StyleSheet.create({
   },
   historyHeaderText: {
     flex: 1,
+  },
+  reloadButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   historyTitle: {
     fontSize: 16,
