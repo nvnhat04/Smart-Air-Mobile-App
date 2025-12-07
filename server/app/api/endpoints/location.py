@@ -103,6 +103,7 @@ async def get_location_history(
             latitude=loc["latitude"],
             longitude=loc["longitude"],
             aqi=loc.get("aqi"),
+            pm25=loc.get("pm25"),
             address=loc.get("address"),
             timestamp=loc["timestamp"]
         )
@@ -150,6 +151,7 @@ async def get_user_location_history(
             latitude=loc["latitude"],
             longitude=loc["longitude"],
             aqi=loc.get("aqi"),
+            pm25=loc.get("pm25"),
             address=loc.get("address"),
             timestamp=loc["timestamp"]
         )
