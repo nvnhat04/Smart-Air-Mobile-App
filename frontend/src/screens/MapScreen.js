@@ -99,10 +99,13 @@ const generateLeafletHTML = (baseUrl) => `
       const map = L.map('map', { 
         zoomControl: false,
         minZoom: 7,
-        maxZoom: 16
+        maxZoom: 16,
+        maxBounds: [[8.0, 102.0], [24.0, 110.0]], // Giới hạn vùng Việt Nam
+        maxBoundsViscosity: 0.5 // Độ "dính" khi kéo ra ngoài bounds
       }).setView([21.0285, 105.8542], 11);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        minZoom: 7,
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap'
       }).addTo(map);
@@ -441,6 +444,7 @@ export default function MapScreen() {
   const webviewRef = React.useRef(null);
   const [locating, setLocating] = useState(false);
   const [selectedStation, setSelectedStation] = useState(null);
+  const savedLocationRef = React.useRef(null); // Track đã save location chưa
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -495,18 +499,27 @@ export default function MapScreen() {
   useEffect(() => {
     // Chỉ lưu nếu là vị trí GPS thực của user (id === 'user-gps-location')
     if (selectedStation && selectedStation.id === 'user-gps-location' && selectedStation.lat && selectedStation.lng) {
+      // Kiểm tra đã save location này chưa (tránh duplicate khi selectedStation update nhiều lần)
+      const locationKey = `${selectedStation.lat},${selectedStation.lng}`;
+      if (savedLocationRef.current === locationKey) {
+        console.log('[MapScreen] ⏭️ Location already saved, skipping duplicate save');
+        return;
+      }
+
       const saveUserLocation = async () => {
         try {
           console.log('[MapScreen] 📍 Attempting to save user GPS location:', selectedStation.name);
           const result = await saveCurrentLocation({
             aqi: selectedStation.aqi || selectedStation.baseAqi,
+            pm25: selectedStation.pm25,
             address: selectedStation.address || selectedStation.name || 'Vị trí của bạn',
           });
           
           if (result?.skipped) {
             console.log(`[MapScreen] ⚠️ Location save skipped (${result.reason}): too soon or too close to last saved location`);
-          } else {
+          } else if (result) {
             console.log('[MapScreen] ✅ User GPS location saved successfully');
+            savedLocationRef.current = locationKey; // Đánh dấu đã save
           }
         } catch (error) {
           console.warn('[MapScreen] ❌ Failed to save user GPS location:', error);
@@ -947,8 +960,8 @@ export default function MapScreen() {
   }, [searchQuery]);
 
   const handleSelectSearchResult = async (item) => {
-    // Clear search UI
-    setSearchQuery(item.name);
+    // Clear search UI completely
+    setSearchQuery('');
     setSearchResults([]);
     setSearchError(null);
 
@@ -1287,7 +1300,10 @@ export default function MapScreen() {
           {/* Thanh header: chỉ nút đóng bên trái, bỏ text "Thông tin trạm đo" */}
           <View style={styles.stationHeaderRow}>
             <TouchableOpacity
-              onPress={() => setSelectedStation(null)}
+              onPress={() => {
+                setSelectedStation(null);
+                savedLocationRef.current = null; // Reset để có thể save lại location nếu quay lại
+              }}
               style={styles.stationHeaderClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >

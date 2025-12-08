@@ -15,7 +15,8 @@ import api from '../services/api';
 const LOCATION_TRACKING_KEY = '@location_tracking';
 const TRACKING_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 const MIN_SAVE_INTERVAL = 30 * 60 * 1000; // 30 minutes - minimum time between saves
-const MIN_DISTANCE_THRESHOLD = 100; // 100 meters - minimum distance to trigger new save
+const MIN_DISTANCE_THRESHOLD = 1000; // 1000 meters - minimum distance to trigger new save
+const DISTANCE_CHECK_TIMEOUT = 60 * 60 * 1000; // 1 hour - sau 1 giờ thì không check khoảng cách nữa
 
 // Helper để tính AQI từ PM2.5 (approximation)
 const calculateAQI = (pm25) => {
@@ -87,13 +88,17 @@ const saveLocationToServer = async (userId, latitude, longitude, aqi = null, add
             return { skipped: true, reason: 'time_threshold' };
           }
           
-          // Kiểm tra khoảng cách: phải cách ít nhất MIN_DISTANCE_THRESHOLD
-          if (lastLat && lastLng) {
-            const distance = calculateDistance(lastLat, lastLng, latitude, longitude);
-            if (distance < MIN_DISTANCE_THRESHOLD) {
-              console.log(`[useLocationTracking] ⚠️ Spam prevention: Only ${Math.round(distance)}m from last location (min: ${MIN_DISTANCE_THRESHOLD}m)`);
-              return { skipped: true, reason: 'distance_threshold' };
+          // Kiểm tra khoảng cách: CHỈ kiểm tra nếu chưa đủ 1 giờ kể từ lần save gần nhất
+          if (timeSinceLastSave < DISTANCE_CHECK_TIMEOUT) {
+            if (lastLat && lastLng) {
+              const distance = calculateDistance(lastLat, lastLng, latitude, longitude);
+              if (distance < MIN_DISTANCE_THRESHOLD) {
+                console.log(`[useLocationTracking] ⚠️ Spam prevention: Only ${Math.round(distance)}m from last location (min: ${MIN_DISTANCE_THRESHOLD}m)`);
+                return { skipped: true, reason: 'distance_threshold' };
+              }
             }
+          } else {
+            console.log(`[useLocationTracking] ℹ️ Over 1 hour since last save (${Math.round(timeSinceLastSave / 60000)} minutes), skipping distance check`);
           }
         }
       } catch (checkError) {
@@ -103,8 +108,8 @@ const saveLocationToServer = async (userId, latitude, longitude, aqi = null, add
     }
 
     const finalAddress = address || await getAddressFromCoords(latitude, longitude);
-    const finalAqi = aqi !== null ? aqi : 75; // Default AQI if not provided
-    const finalPm25 = pm25 !== null ? pm25 : (finalAqi ? (finalAqi * 0.6) : 45); // Approximate PM2.5 from AQI
+    const finalAqi = (aqi !== null && aqi !== undefined) ? aqi : 75; // Default AQI if not provided
+    const finalPm25 = (pm25 !== null && pm25 !== undefined) ? pm25 : (finalAqi ? (finalAqi * 0.6) : 45); // Approximate PM2.5 from AQI
 
     console.log('[useLocationTracking] ✅ Saving location:', {
       userId,
@@ -112,7 +117,8 @@ const saveLocationToServer = async (userId, latitude, longitude, aqi = null, add
       lng: longitude,
       aqi: finalAqi,
       pm25: finalPm25,
-      address: finalAddress
+      address: finalAddress,
+      source: aqi !== null ? 'manual' : 'auto-tracking' // Debug: nguồn gọi
     });
 
     const result = await api.saveLocation(userId, latitude, longitude, finalAqi, finalAddress, finalPm25);

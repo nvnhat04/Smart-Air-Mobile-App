@@ -76,7 +76,7 @@ const generateAnalyticsData = () => {
       aqi,
       location: `Dự báo: ${locationName}`,
       type: 'future',
-      note: `Bạn đã đến đây ngày ${pastDateStr}`,
+      note: `Bạn đã đến đây nhiều lần ngày ${pastDateStr}`,
     });
   }
 
@@ -95,6 +95,8 @@ export default function AnalyticExposureScreen() {
   const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'last3days', 'last7days'
   const [exposureMode, setExposureMode] = useState('outdoor'); // 'outdoor', 'indoor', 'indoor_purifier'
   const [showExposureMenu, setShowExposureMenu] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState(7); // 1, 3, or 7 days
+  const [showStatsPeriodMenu, setShowStatsPeriodMenu] = useState(false);
   const [userLocation, setUserLocation] = useState(null); // Vị trí thực của user từ GPS/history
   const [locationStats, setLocationStats] = useState(null); // Stats from API
   const [escapeDestinations, setEscapeDestinations] = useState([]); // Destinations with real AQI
@@ -137,7 +139,7 @@ export default function AnalyticExposureScreen() {
     try {
       // Call API to get location stats
       try {
-        const stats = await api.getLocationStats(7);
+        const stats = await api.getLocationStats(statsPeriod);
         setLocationStats(stats);
         console.log('[AnalyticExposureScreen] Location stats:', stats);
       } catch (statsError) {
@@ -154,7 +156,15 @@ export default function AnalyticExposureScreen() {
     } finally {
       setLoading(false);
     }
-  }, [historyData, overviewLoaded]);
+  }, [historyData, overviewLoaded, statsPeriod]);
+
+  // Reload stats when period changes
+  useEffect(() => {
+    if (overviewLoaded) {
+      setOverviewLoaded(false);
+      loadOverviewData();
+    }
+  }, [statsPeriod]);
 
   // Manual reload function for history tab
   const reloadHistory = useCallback(async () => {
@@ -417,16 +427,6 @@ export default function AnalyticExposureScreen() {
     });
   }, [historyData, dateFilter]);
 
-  // Show loading state
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Đang tải dữ liệu phơi nhiễm...</Text>
-      </View>
-    );
-  }
-
   const selectedData = analyticsData[selectedIdx] || {
     key: '0',
     date: '--/--',
@@ -617,11 +617,20 @@ export default function AnalyticExposureScreen() {
       {/* Tab Content: Tổng quan */}
       {activeTab === 'overview' && (
         <>
-      {/* Mini bar chart dạng thẻ */}
-      <View style={styles.chartCard}>
+          {loading || !overviewLoaded ? (
+            <View style={styles.loadingTabContainer}>
+              <ActivityIndicator size="large" color="#2563eb" />
+              <Text style={styles.loadingTabText}>Đang tải dữ liệu phơi nhiễm...</Text>
+            </View>
+          ) : (
+            <>
+              {/* Mini bar chart dạng thẻ */}
+              <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
-          <View style={styles.chartAccent} />
-          <Text style={styles.chartTitle}>Diễn biến 13 ngày</Text>
+          <View style={styles.chartHeaderLeft}>
+            <View style={styles.chartAccent} />
+            <Text style={styles.chartTitle}>Diễn biến 13 ngày</Text>
+          </View>
         </View>
 
         {/* Chart container with Y-axis */}
@@ -671,14 +680,15 @@ export default function AnalyticExposureScreen() {
                         {
                           height: barHeight,
                           backgroundColor: getAQIColor(adjustedAqi),
-                          opacity: isSelected ? 1 : 0.7,
-                          borderWidth: isToday ? 2 : (isSelected ? 1.5 : 0),
-                          borderColor: isToday ? '#2563eb' : '#0f172a',
-                          shadowColor: isToday ? '#2563eb' : 'transparent',
-                          shadowOpacity: isToday ? 0.3 : 0,
-                          shadowRadius: 4,
-                          shadowOffset: { width: 0, height: 2 },
-                          elevation: isToday ? 3 : 0,
+                          opacity: isSelected ? 1 : 0.75,
+                          transform: [{ scale: isSelected ? 1.15 : 1 }],
+                          borderWidth: isToday ? 2 : 0,
+                          borderColor: isToday ? '#2563eb' : 'transparent',
+                          shadowColor: isToday ? '#2563eb' : isSelected ? getAQIColor(adjustedAqi) : 'transparent',
+                          shadowOpacity: isToday ? 0.4 : isSelected ? 0.3 : 0,
+                          shadowRadius: isToday ? 6 : 4,
+                          shadowOffset: { width: 0, height: isToday ? 3 : 2 },
+                          elevation: isToday ? 4 : isSelected ? 3 : 0,
                         },
                       ]}
                     />
@@ -741,18 +751,74 @@ export default function AnalyticExposureScreen() {
           <View style={styles.exposureIconBox}>
             <Text style={styles.exposureIcon}>🫁</Text>
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.exposureTitle}>Thống kê mức độ phơi nhiễm</Text>
             <Text style={styles.exposureSubtitle}>
               Dựa trên lộ trình thường ngày của bạn
             </Text>
+          </View>
+          <View>
+            <TouchableOpacity
+              style={styles.statsPeriodDropdown}
+              onPress={() => setShowStatsPeriodMenu(!showStatsPeriodMenu)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.statsPeriodDropdownText}>
+                {statsPeriod === 1 ? '1 ngày' : statsPeriod === 3 ? '3 ngày' : '7 ngày'}
+              </Text>
+              <Feather 
+                name={showStatsPeriodMenu ? 'chevron-up' : 'chevron-down'} 
+                size={14} 
+                color="#64748b" 
+              />
+            </TouchableOpacity>
+            {showStatsPeriodMenu && (
+              <View style={styles.statsPeriodMenu}>
+                <TouchableOpacity
+                  style={[styles.statsPeriodMenuItem, statsPeriod === 1 && styles.statsPeriodMenuItemActive]}
+                  onPress={() => {
+                    setStatsPeriod(1);
+                    setShowStatsPeriodMenu(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.statsPeriodMenuText, statsPeriod === 1 && styles.statsPeriodMenuTextActive]}>
+                    1 ngày
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statsPeriodMenuItem, statsPeriod === 3 && styles.statsPeriodMenuItemActive]}
+                  onPress={() => {
+                    setStatsPeriod(3);
+                    setShowStatsPeriodMenu(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.statsPeriodMenuText, statsPeriod === 3 && styles.statsPeriodMenuTextActive]}>
+                    3 ngày
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statsPeriodMenuItem, statsPeriod === 7 && styles.statsPeriodMenuItemActive]}
+                  onPress={() => {
+                    setStatsPeriod(7);
+                    setShowStatsPeriodMenu(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.statsPeriodMenuText, statsPeriod === 7 && styles.statsPeriodMenuTextActive]}>
+                    7 ngày
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
 
         <View style={styles.exposureSection}>
           {/* Past card */}
           <View style={styles.exposureCardPast}>
-            <Text style={styles.exposureTag}>7 NGÀY QUA</Text>
+            <Text style={styles.exposureTag}>{statsPeriod === 1 ? 'HÔM QUA' : statsPeriod === 3 ? '3 NGÀY QUA' : '7 NGÀY QUA'}</Text>
             <Text style={styles.exposureAqi}>{pastAvg}</Text>
             <Text style={styles.exposureAqiLabel}>AQI Trung bình</Text>
 
@@ -770,7 +836,7 @@ export default function AnalyticExposureScreen() {
 
           {/* Future card */}
           <View style={styles.exposureCardFuture}>
-            <Text style={[styles.exposureTag, { color: '#2563eb' }]}>7 NGÀY TỚI</Text>
+            <Text style={[styles.exposureTag, { color: '#2563eb' }]}>{statsPeriod === 1 ? 'HÔM NAY' : statsPeriod === 3 ? '3 NGÀY TỚI' : '7 NGÀY TỚI'}</Text>
             <Text style={[styles.exposureAqi, { color: '#2563eb' }]}>{futureAvg}</Text>
             <Text style={styles.exposureAqiLabel}>AQI Dự kiến</Text>
 
@@ -817,14 +883,23 @@ export default function AnalyticExposureScreen() {
           </Text>
         </View>
       </View>
-      </>
+            </>
+          )}
+        </>
       )}
 
       {/* Tab Content: Trốn bụi */}
       {activeTab === 'escape' && (
-        <View style={styles.escapeContainer}>
-      {/* Trốn bụi cuối tuần */}
-      <View style={styles.weekendSection}>
+        <>
+          {loadingDestinations ? (
+            <View style={styles.loadingTabContainer}>
+              <ActivityIndicator size="large" color="#2563eb" />
+              <Text style={styles.loadingTabText}>Đang tải địa điểm...</Text>
+            </View>
+          ) : (
+            <View style={styles.escapeContainer}>
+              {/* Trốn bụi cuối tuần */}
+              <View style={styles.weekendSection}>
         {/* Header + nút chọn bán kính */}
         <View style={styles.weekendHeaderRow}>
           <View style={styles.weekendHeaderText}>
@@ -992,13 +1067,22 @@ export default function AnalyticExposureScreen() {
             );
           })
         )}
-      </View>
-        </View>
+              </View>
+            </View>
+          )}
+        </>
       )}
 
       {/* Tab Content: Lịch sử chi tiết */}
       {activeTab === 'history' && (
-        <View style={styles.historyContainer}>
+        <>
+          {loading || !historyLoaded ? (
+            <View style={styles.loadingTabContainer}>
+              <ActivityIndicator size="large" color="#2563eb" />
+              <Text style={styles.loadingTabText}>Đang tải lịch sử vị trí...</Text>
+            </View>
+          ) : (
+            <View style={styles.historyContainer}>
           <View style={styles.historyHeader}>
             <View style={styles.historyHeaderIcon}>
               <Feather name="map-pin" size={18} color="#1d4ed8" />
@@ -1209,7 +1293,9 @@ export default function AnalyticExposureScreen() {
               );
             })
           )}
-        </View>
+            </View>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -1497,25 +1583,35 @@ const styles = StyleSheet.create({
   chartCard: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
-    padding: 14,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#dbeafe',
+    borderColor: '#e0e7ff',
     marginBottom: 16,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   chartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  chartHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   chartAccent: {
-    width: 3,
-    height: 18,
+    width: 4,
+    height: 20,
     borderRadius: 999,
     backgroundColor: '#6366f1',
-    marginRight: 8,
+    marginRight: 10,
   },
   chartTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -1568,9 +1664,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bar: {
-    width: 10,
-    borderRadius: 999,
-    marginHorizontal: 2,
+    width: 11,
+    borderRadius: 4,
+    marginHorizontal: 1.5,
   },
   barLabelContainer: {
     position: 'absolute',
@@ -1595,13 +1691,20 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   selectedInfoCard: {
-    marginTop: 8,
-    borderRadius: 18,
+    marginTop: 12,
+    borderRadius: 20,
     backgroundColor: '#eff6ff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   selectedTagRow: {
     flexDirection: 'row',
@@ -1663,18 +1766,28 @@ const styles = StyleSheet.create({
     marginRight: 6,
     backgroundColor: '#f9fafb',
     borderRadius: 20,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   exposureCardFuture: {
     flex: 1,
     marginLeft: 6,
     backgroundColor: '#eff6ff',
     borderRadius: 20,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: '#93c5fd',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   exposureTag: {
     fontSize: 11,
@@ -1741,6 +1854,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  statsPeriodDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+    minWidth: 80,
+  },
+  statsPeriodDropdownText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  statsPeriodMenu: {
+    position: 'absolute',
+    top: 38,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    minWidth: 100,
+    zIndex: 1000,
+  },
+  statsPeriodMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  statsPeriodMenuItemActive: {
+    backgroundColor: '#eff6ff',
+  },
+  statsPeriodMenuText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  statsPeriodMenuTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '600',
   },
   exposureIconBox: {
     width: 32,
