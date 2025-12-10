@@ -2,6 +2,7 @@
 Location tracking endpoints
 """
 from datetime import datetime, timedelta, timezone
+from math import asin, cos, radians, sin, sqrt
 from typing import List, Optional
 
 from app.core.security import get_current_user
@@ -12,6 +13,68 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 router = APIRouter()
+
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great circle distance between two points on Earth (in kilometers)
+    """
+    # Convert decimal degrees to radians
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    
+    # Radius of Earth in kilometers
+    r = 6371
+    
+    return c * r
+
+
+def filter_duplicate_locations(locations: List[dict], time_threshold_minutes: int = 30, distance_threshold_km: float = 1.0) -> List[dict]:
+    """
+    Filter out duplicate location records that are too close in time and distance.
+    
+    Args:
+        locations: List of location documents (sorted by timestamp DESC)
+        time_threshold_minutes: Minimum time gap between records (default 30 minutes)
+        distance_threshold_km: Minimum distance between records (default 1 km)
+    
+    Returns:
+        Filtered list of locations
+    """
+    if not locations:
+        return []
+    
+    filtered = [locations[0]]  # Always keep the first (most recent) record
+    
+    for current_loc in locations[1:]:
+        should_keep = True
+        
+        for kept_loc in filtered:
+            # Check time difference
+            time_diff = abs((kept_loc["timestamp"] - current_loc["timestamp"]).total_seconds() / 60)
+            
+            # Check distance difference
+            distance = haversine_distance(
+                kept_loc["latitude"],
+                kept_loc["longitude"],
+                current_loc["latitude"],
+                current_loc["longitude"]
+            )
+            
+            # If within time threshold AND within distance threshold, skip this record
+            if time_diff < time_threshold_minutes and distance < distance_threshold_km:
+                should_keep = False
+                break
+        
+        if should_keep:
+            filtered.append(current_loc)
+    
+    return filtered
 
 
 @router.post('/save', response_model=LocationRecordResponse, status_code=status.HTTP_201_CREATED)
@@ -96,6 +159,9 @@ async def get_location_history(
     
     locations = await cursor.to_list(length=limit)
     
+    # Filter out duplicates (same location within 30 minutes and 1km)
+    filtered_locations = filter_duplicate_locations(locations)
+    
     return [
         LocationRecordResponse(
             _id=str(loc["_id"]),
@@ -107,7 +173,7 @@ async def get_location_history(
             address=loc.get("address"),
             timestamp=loc["timestamp"]
         )
-        for loc in locations
+        for loc in filtered_locations
     ]
 
 
@@ -144,6 +210,9 @@ async def get_user_location_history(
     
     locations = await cursor.to_list(length=limit)
     
+    # Filter out duplicates (same location within 30 minutes and 1km)
+    filtered_locations = filter_duplicate_locations(locations)
+    
     return [
         LocationRecordResponse(
             _id=str(loc["_id"]),
@@ -155,7 +224,7 @@ async def get_user_location_history(
             address=loc.get("address"),
             timestamp=loc["timestamp"]
         )
-        for loc in locations
+        for loc in filtered_locations
     ]
 
 
@@ -206,14 +275,14 @@ async def get_location_stats(
     start_date = min(timestamps).strftime("%Y-%m-%d")
     end_date = max(timestamps).strftime("%Y-%m-%d")
     
-    # AQI statistics
-    aqi_values = [loc["aqi"] for loc in locations if loc.get("aqi") is not None]
+    # AQI statistics - filter out null and 0 values
+    aqi_values = [loc["aqi"] for loc in locations if loc.get("aqi") is not None and loc.get("aqi") > 0]
     avg_aqi = sum(aqi_values) / len(aqi_values) if aqi_values else None
     max_aqi = max(aqi_values) if aqi_values else None
     min_aqi = min(aqi_values) if aqi_values else None
     
-    # PM2.5 statistics
-    pm25_values = [loc["pm25"] for loc in locations if loc.get("pm25") is not None]
+    # PM2.5 statistics - filter out null and 0 values
+    pm25_values = [loc["pm25"] for loc in locations if loc.get("pm25") is not None and loc.get("pm25") > 0]
     avg_pm25 = sum(pm25_values) / len(pm25_values) if pm25_values else None
     max_pm25 = max(pm25_values) if pm25_values else None
     min_pm25 = min(pm25_values) if pm25_values else None

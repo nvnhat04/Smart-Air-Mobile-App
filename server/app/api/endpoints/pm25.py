@@ -165,7 +165,7 @@ async def get_pm25_forecast(
         weather_data = {}
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,wind_speed_10m_max&timezone=Asia/Bangkok&forecast_days={days}"
+                weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,wind_speed_10m_max,rain_sum&timezone=Asia/Bangkok&forecast_days={days}"
                 weather_response = await client.get(weather_url)
                 
                 if weather_response.status_code == 200:
@@ -179,6 +179,7 @@ async def get_pm25_forecast(
                             "temp_min": daily.get("temperature_2m_min", [])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
                             "humidity": daily.get("relative_humidity_2m_mean", [])[i] if i < len(daily.get("relative_humidity_2m_mean", [])) else None,
                             "wind_speed": daily.get("wind_speed_10m_max", [])[i] if i < len(daily.get("wind_speed_10m_max", [])) else None,
+                            "rain_sum": daily.get("rain_sum", [])[i] if i < len(daily.get("rain_sum", [])) else None,
                         }
                     logger.info(f"✅ Weather data fetched for {len(weather_data)} days")
                 else:
@@ -210,7 +211,7 @@ async def get_pm25_forecast(
             temp_avg = round((temp_max + temp_min) / 2) if temp_max and temp_min else None
             humidity = round(weather.get("humidity")) if weather.get("humidity") else None
             wind_speed = round(weather.get("wind_speed"), 1) if weather.get("wind_speed") else None
-            
+            rain_sum = round(weather.get("rain_sum"), 1) if weather.get("rain_sum") else None
             # Check if we have PM2.5 data for this date
             pm25_value = None
             aqi_value = None
@@ -257,6 +258,7 @@ async def get_pm25_forecast(
                 "temp_min": round(temp_min) if temp_min else None,
                 "humidity": humidity,
                 "wind_speed": wind_speed,
+                "rain_sum": rain_sum
             })
         
         return {
