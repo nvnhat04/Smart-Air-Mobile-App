@@ -105,6 +105,7 @@ export default function DetailStationScreen() {
             temp_min: item.temp_min || null,
             humidity: item.humidity || null,
             wind_speed: item.wind_speed || null,
+            precipitation: item.rain_sum || 0,
             dateKey: item.dateKey,
             hasData: item.hasData,
           }));
@@ -120,6 +121,7 @@ export default function DetailStationScreen() {
               temp: temp ? Math.round(temp) : temp,
               humidity: station.humidity || weeklyData[0].humidity,
               wind_speed: station.windSpeed || weeklyData[0].wind_speed,
+              precipitation: station.precipitation || weeklyData[0].precipitation || 0,
               hasData: true, // Station luôn có data
             };
             console.log('✅ Day[0] updated with CEM data:', {
@@ -137,6 +139,7 @@ export default function DetailStationScreen() {
               temp: weeklyData[0].temp,
               humidity: weeklyData[0].humidity,
               wind_speed: weeklyData[0].wind_speed,
+              precipitation: weeklyData[0].precipitation,
             } : null,
           });
         } else {
@@ -185,6 +188,7 @@ export default function DetailStationScreen() {
       humidity: latestData?.humidity || station.humidity || 70,
       temp: Math.round(tempValue),
       aqi: currentAqi,
+      precipitation: latestData?.precipitation || station.precipitation || 0,
       advice: healthAdvice, // Override advice LAST
     };
     
@@ -258,6 +262,7 @@ export default function DetailStationScreen() {
           label: item.label,
           temp: item.temp,
           humidity: item.humidity,
+          precipitation: item.precipitation,
           pm25: item.pm25,
           idx,
           color: getAQIColor(item.aqi), // Thêm màu cho điểm
@@ -348,10 +353,10 @@ export default function DetailStationScreen() {
                 {typeof data.pm25 === 'number' ? data.pm25.toFixed(2) : data.pm25} µg/m³
               </Text>
             </View>
-
+{/* 
             <View style={styles.adviceBubble}>
               <Text style={styles.adviceText}>💡 {data.advice?.text}</Text>
-            </View>
+            </View> */}
           </View>
         </View>
 
@@ -380,6 +385,14 @@ export default function DetailStationScreen() {
               </View>
               <Text style={styles.metricValue}>{data.wind} km/h</Text>
               <Text style={styles.metricLabel}>Gió</Text>
+            </View>
+
+            <View style={styles.metricCard}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#dbeafe' }]}>
+                <Text style={styles.metricIcon}>🌧️</Text>
+              </View>
+              <Text style={styles.metricValue}>{data.precipitation} mm</Text>
+              <Text style={styles.metricLabel}>Lượng mưa</Text>
             </View>
           </View>
 
@@ -588,6 +601,11 @@ export default function DetailStationScreen() {
                       💧 {selectedPoint.humidity}%
                     </Text>
                   )}
+                  {selectedPoint.precipitation !== null && selectedPoint.precipitation !== undefined && (
+                    <Text style={styles.tooltipDetail}>
+                      🌧️ {selectedPoint.precipitation} mm
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
@@ -646,27 +664,46 @@ export default function DetailStationScreen() {
               {weekly.map((item) => {
                 const hasData = item.aqi !== null && item.aqi !== undefined;
                 const badge = hasData ? getAQIBadgeColor(item.aqi) : { bg: '#f3f4f6', text: '#9ca3af' };
+                const cardBgColor = hasData ? getAQIColor(item.aqi) : '#f3f4f6';
+                const textColor = hasData ? '#ffffff' : '#9ca3af';
+                
+                // Calculate temp display with min/max if available
+                const tempDisplay = hasData ? (
+                  item.temp_max !== null && item.temp_min !== null 
+                    ? `${Math.round(item.temp_min)}° - ${Math.round(item.temp_max)}° `
+                    : `${Math.round(item.temp)}°C`
+                ) : 'N/A';
                 
                 return (
                   <View key={item.date} style={[
                     styles.forecastCard,
+                    { backgroundColor: cardBgColor },
                     !hasData && styles.forecastCardNoData
                   ]}>
-                    <Text style={styles.forecastDay}>{item.label}</Text>
-                    <Text style={styles.forecastDate}>{item.date}</Text>
-                    <Text style={styles.forecastTemp}>
-                      {hasData ? `${Math.round(item.temp)}°C` : 'N/A'}
+                    <Text style={[styles.forecastDay, { color: textColor }]}>{item.label}</Text>
+                    <Text style={[styles.forecastDate, { color: textColor, opacity: 0.9 }]}>{item.date}</Text>
+                    <Text style={[styles.forecastTemp, { color: textColor }]}>
+                      {tempDisplay}
                     </Text>
+                    {hasData && item.precipitation !== null && item.precipitation !== undefined && (
+                      <Text style={[styles.forecastPrecip, { color: textColor }]}>
+                        🌧️ {item.precipitation}mm
+                      </Text>
+                    )}
                     <View
                       style={[
                         styles.forecastAqiBadge,
-                        { backgroundColor: badge.bg },
+                        { 
+                          backgroundColor: hasData ? 'rgba(255,255,255,0.25)' : badge.bg,
+                          borderWidth: hasData ? 1 : 0,
+                          borderColor: hasData ? 'rgba(255,255,255,0.4)' : 'transparent'
+                        },
                       ]}
                     >
                       <Text
                         style={[
                           styles.forecastAqiText,
-                          { color: badge.text },
+                          { color: hasData ? textColor : badge.text, fontWeight: '700' },
                         ]}
                       >
                         {hasData ? `${item.aqi} AQI` : 'Chưa có'}
@@ -840,12 +877,14 @@ const styles = StyleSheet.create({
   },
   metricsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 16,
+    gap: 5,
   },
   metricCard: {
-    flex: 1,
-    marginHorizontal: 4,
+    flexBasis: '48%',
+    minWidth: 80,
     borderRadius: 20,
     paddingVertical: 14,
     paddingHorizontal: 8,
@@ -866,7 +905,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   metricValue: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '800',
     color: '#111827',
   },
@@ -1142,6 +1181,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#111827',
     marginBottom: 6,
+  },
+  forecastPrecip: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+    opacity: 0.95,
   },
   forecastAqiBadge: {
     borderRadius: 999,

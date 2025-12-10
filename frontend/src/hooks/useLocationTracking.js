@@ -108,8 +108,14 @@ const saveLocationToServer = async (userId, latitude, longitude, aqi = null, add
     }
 
     const finalAddress = address || await getAddressFromCoords(latitude, longitude);
-    const finalAqi = (aqi !== null && aqi !== undefined) ? aqi : 75; // Default AQI if not provided
-    const finalPm25 = (pm25 !== null && pm25 !== undefined) ? pm25 : (finalAqi ? (finalAqi * 0.6) : 45); // Approximate PM2.5 from AQI
+    const finalAqi = (aqi !== null && aqi !== undefined) ? aqi : null;
+    const finalPm25 = (pm25 !== null && pm25 !== undefined) ? pm25 : (finalAqi ? (finalAqi * 0.6) : null);
+
+    // Skip saving if no AQI data available
+    if (finalAqi === null) {
+      console.warn('[useLocationTracking] ⚠️ No AQI data available, skipping save');
+      return { skipped: true, reason: 'no_aqi_data' };
+    }
 
     console.log('[useLocationTracking] ✅ Saving location:', {
       userId,
@@ -189,11 +195,32 @@ export const useLocationTracking = (enabled = true) => {
     // const latitude = 21.0278; // Example latitude
     // const longitude = 105.8342; // Example longitude
 
-      // Tính AQI nếu có PM2.5 trong additionalData
-      const { aqi, address, pm25 } = additionalData;
+      // Nếu không có AQI trong additionalData, fetch từ backend
+      let finalAqi = additionalData.aqi;
+      let finalPm25 = additionalData.pm25;
+      let finalAddress = additionalData.address;
+
+      if (finalAqi === null || finalAqi === undefined) {
+        try {
+          // Fetch PM2.5 data từ backend
+          console.log('[useLocationTracking] Fetching PM2.5 data from backend for auto-save...');
+          const pm25Data = await api.getPM25Point(latitude, longitude);
+          if (pm25Data && pm25Data.aqi) {
+            finalAqi = pm25Data.aqi;
+            finalPm25 = pm25Data.pm25;
+            console.log('[useLocationTracking] ✅ Got real AQI from backend:', finalAqi);
+          } else {
+            console.warn('[useLocationTracking] ⚠️ Backend returned no AQI data, skip auto-save');
+            return null; // Skip auto-save if no data
+          }
+        } catch (error) {
+          console.warn('[useLocationTracking] ⚠️ Failed to fetch PM2.5 from backend:', error.message);
+          return null; // Skip auto-save if backend fails
+        }
+      }
 
       // Lưu vào server (với spam check)
-      const result = await saveLocationToServer(userId, latitude, longitude, aqi, address, pm25, true);
+      const result = await saveLocationToServer(userId, latitude, longitude, finalAqi, finalAddress, finalPm25, true);
 
       // Chỉ cập nhật lastSaveTimeRef nếu thực sự lưu thành công (không bị skip)
       if (result && !result.skipped) {

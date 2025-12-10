@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import api from '../services/api';
 
 export default function RegisterScreen() {
@@ -24,6 +24,13 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!email || !username || !password) {
       setError('Email, username và mật khẩu là bắt buộc');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[\w-.]+@[\w-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError('Email không hợp lệ. Vui lòng nhập đúng định dạng email.');
       return;
     }
 
@@ -58,11 +65,22 @@ export default function RegisterScreen() {
       const res = await api.auth.register(email, username, password, profile);
       console.log('[RegisterScreen] Register response:', res);
       
-      Alert.alert('Thành công', `Tài khoản đã được tạo! Username: @${res.user?.username || username}`);
+      // Alert.alert('Thành công', `Tài khoản đã được tạo! Username: @${res.user?.username || username}`);
       navigation.navigate('Login');
     } catch (e) {
-      console.error('[RegisterScreen] Register error:', e);
-      setError(e.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      if (typeof e === 'object') {
+        // console.error('[RegisterScreen] Register error:', JSON.stringify(e));
+        let msg = e.message;
+        if (!msg && typeof e === 'object') {
+          if (e.error) msg = e.error;
+          else if (e.detail) msg = e.detail;
+          else msg = JSON.stringify(e);
+        }
+        setError(msg || 'Đăng ký thất bại. Vui lòng thử lại.');
+      } else {
+        // console.error('[RegisterScreen] Register error:', e);
+        setError(String(e) || 'Đăng ký thất bại. Vui lòng thử lại.');
+      }
     } finally {
       setLoading(false);
     }
@@ -368,10 +386,11 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
   },
   errorText: {
-    color: '#dc2626',
-    fontSize: 14,
+    color: '#dc2626', // Đỏ đậm hơn
+    fontSize: 15,
     marginLeft: 8,
     flex: 1,
+    fontWeight: 'bold',
   },
   pickerContainer: {
     paddingRight: 8,

@@ -47,7 +47,8 @@ try {
 const DEFAULT_FALLBACK = 'http://10.0.2.2:8000';
 const DEPLOY_URL = 'https://smart-air-mobile-app.onrender.com'; // Thay bằng Vercel URL sau khi deploy
 // Thay YOUR_WIFI_IP bằng IP máy tính của bạn (xem bằng lệnh ipconfig)
-const LOCAL_NETWORK_URL = ''; // VD: 192.168.1.10, 10.0.0.5, etc.
+// const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // VD: 192.168.1.10, 10.0.0.5, etc.
+const LOCAL_NETWORK_URL = '';
 const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
 
 // console.warn(`[api.js] BASE_URL: ${BASE_URL}`);
@@ -61,7 +62,6 @@ const api = {
   get AUTH_BASE() {
     return `${BASE_URL}/auth`;
   },
-
   // POST /location/save
   saveLocation: async (userId, lat, lng, aqi, address, pm25 = null) => {
     const url = `${BASE_URL}/location/save`;

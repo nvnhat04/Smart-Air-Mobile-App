@@ -548,10 +548,21 @@ export default function MapScreen() {
   };
 
   // Fetch weather data from Open-Meteo API (free, no API key required)
-  const fetchWeatherData = async (lat, lon) => {
+  // If date is provided, use forecast API; otherwise use current API
+  const fetchWeatherData = async (lat, lon, date = null) => {
     try {
-      // Open-Meteo API endpoint with current weather parameters
-      const url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`;
+      let url;
+      let formattedDate = null;
+      
+      if (date) {
+        // Use forecast API with specific date (format: YYYY-MM-DD)
+        formattedDate = date.split('T')[0]; // Extract date part from ISO string
+        url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation&start_date=${formattedDate}&end_date=${formattedDate}&timezone=auto`;
+      } else {
+        // Use current weather API for today
+        url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation&timezone=auto`;
+      }
+      
       console.log('Fetching weather from:', url);
       const response = await fetch(url);
       if (!response.ok) {
@@ -559,14 +570,31 @@ export default function MapScreen() {
       }
       
       const data = await response.json();
-      const current = data.current || {};
       
-      return {
-        temp: Math.round(current.temperature_2m || 0),
-        humidity: current.relative_humidity_2m || 0,
-        windSpeed: current.wind_speed_10m || 0,
-        weatherCode: current.weather_code || 0,
-      };
+      if (date && data.hourly) {
+        // For forecast data, get average of the day (or middle of day around noon)
+        const hourly = data.hourly;
+        const midIndex = Math.floor(hourly.time.length / 2); // Get noon data
+        console.log(`Fetched weather data for ${formattedDate}:`, hourly.precipitation !== undefined ? `Temp: ${hourly.temperature_2m[midIndex]}°C, Precip: ${hourly.precipitation[midIndex]}mm` : 'No hourly data');
+        return {
+          temp: Math.round(hourly.temperature_2m[midIndex] || 0),
+          humidity: hourly.relative_humidity_2m[midIndex] || 0,
+          windSpeed: hourly.wind_speed_10m[midIndex] || 0,
+          weatherCode: hourly.weather_code[midIndex] || 0,
+          precipitation: hourly.precipitation[midIndex] || 0,
+        };
+      } else {
+        // For current data
+        const current = data.current || {};
+        console.log('Fetched current weather data:', current.precipitation !== undefined ? current : 'No current weather data available');
+        return {
+          temp: Math.round(current.temperature_2m || 0),
+          humidity: current.relative_humidity_2m || 0,
+          windSpeed: current.wind_speed_10m || 0,
+          weatherCode: current.weather_code || 0,
+          precipitation: current.precipitation || 0,
+        };
+      }
     } catch (error) {
       console.error('Error fetching weather data:', error);
       return {
@@ -574,6 +602,7 @@ export default function MapScreen() {
         humidity: 0,
         windSpeed: 0,
         weatherCode: 0,
+        precipitation: 0,
       };
     }
   };
@@ -658,13 +687,13 @@ export default function MapScreen() {
       // Use Promise.allSettled instead of Promise.all to handle individual failures gracefully
       const results = await Promise.allSettled([
         fetchPM25DataFromBackend(validLat, validLon, selectedDay?.isoDate),
-        fetchWeatherData(validLat, validLon),
+        fetchWeatherData(validLat, validLon, selectedDay?.isoDate),
         reverseGeocode(validLat, validLon),
       ]);
       
       // Extract data from settled promises with fallback values
       const pm25Data = results[0].status === 'fulfilled' ? results[0].value : null;
-      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0 };
+      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0, precipitation: 0 };
       const locationData = results[2].status === 'fulfilled' ? results[2].value : { 
         name: 'Điểm được chọn', 
         address: `${validLat.toFixed(4)}, ${validLon.toFixed(4)}`, 
@@ -709,6 +738,7 @@ export default function MapScreen() {
         humidity: weatherData.humidity,
         windSpeed: weatherData.windSpeed,
         weatherCode: weatherData.weatherCode,
+        precipitation: weatherData.precipitation,
         advice: getHealthAdvice(pm25Data?.aqi),
         category: pm25Data?.category || null,
       };
@@ -746,10 +776,18 @@ export default function MapScreen() {
       return selectedStation;
     }
     
-    // Otherwise, use data from stationDetailsById (has status, color, advice calculated)
+    // Otherwise, merge data from stationDetailsById with weather data from selectedStation
     const detailed = stationDetailsById[selectedStation.id];
     if (detailed) {
-      return detailed;
+      // Merge: Keep weather data from selectedStation (temp, humidity, windSpeed, precipitation)
+      return {
+        ...detailed,
+        temp: selectedStation.temp !== undefined ? selectedStation.temp : detailed.temp,
+        humidity: selectedStation.humidity !== undefined ? selectedStation.humidity : detailed.humidity,
+        windSpeed: selectedStation.windSpeed !== undefined ? selectedStation.windSpeed : detailed.windSpeed,
+        precipitation: selectedStation.precipitation !== undefined ? selectedStation.precipitation : detailed.precipitation,
+        weatherCode: selectedStation.weatherCode !== undefined ? selectedStation.weatherCode : detailed.weatherCode,
+      };
     }
     
     // Fallback: calculate status, color, advice if not in stationDetailsById
@@ -822,13 +860,13 @@ export default function MapScreen() {
       // Use Promise.allSettled to handle individual failures gracefully
       const results = await Promise.allSettled([
         fetchPM25DataFromBackend(validLat, validLon, selectedDay?.isoDate),
-        fetchWeatherData(validLat, validLon),
+        fetchWeatherData(validLat, validLon, selectedDay?.isoDate),
         reverseGeocode(validLat, validLon),
       ]);
       
       // Extract data from settled promises with fallback values
       const pm25Data = results[0].status === 'fulfilled' ? results[0].value : null;
-      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0 };
+      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0, precipitation: 0 };
       const locationData = results[2].status === 'fulfilled' ? results[2].value : { 
         name: 'Vị trí của bạn', 
         address: `${validLat.toFixed(4)}, ${validLon.toFixed(4)}`, 
@@ -850,7 +888,7 @@ export default function MapScreen() {
         lat: validLat,
         lon: validLon,
         lng: validLon,
-        name: 'Vị trí của bạn',
+        name: locationData.name,
         address: locationData.address,
         district: locationData.district,
         city: locationData.city,
@@ -862,6 +900,7 @@ export default function MapScreen() {
         humidity: weatherData.humidity,
         windSpeed: weatherData.windSpeed,
         weatherCode: weatherData.weatherCode,
+        precipitation: weatherData.precipitation,
         advice: getHealthAdvice(pm25Data?.aqi),
         category: pm25Data?.category || null,
       };
@@ -1065,7 +1104,22 @@ export default function MapScreen() {
               if (fullStation) {
                 // Use full data from CEM API directly - don't recalculate AQI
                 // The AQI from cemStations is already correct from the API
-                setSelectedStation(fullStation);
+                // But fetch weather data (temp, humidity, windSpeed, precipitation) from Open-Meteo
+                const lon = fullStation.lon || fullStation.lng;
+                fetchWeatherData(fullStation.lat, lon, selectedDay?.isoDate).then(weatherData => {
+                  setSelectedStation({
+                    ...fullStation,
+                    temp: weatherData.temp,
+                    humidity: weatherData.humidity,
+                    windSpeed: weatherData.windSpeed,
+                    precipitation: weatherData.precipitation,
+                    weatherCode: weatherData.weatherCode,
+                  });
+                }).catch(err => {
+                  console.error('Error fetching weather for station:', err);
+                  // Still show station without weather data
+                  setSelectedStation(fullStation);
+                });
               } else {
                 // Fallback to basic data from WebView
                 setSelectedStation(data.payload);
@@ -1322,6 +1376,15 @@ export default function MapScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.stationName}>{selectedStationDetail.name}</Text>
 
+                  {/* Note for user GPS location */}
+                  {selectedStationDetail.id === 'user-gps-location' && (
+                    <View style={{ marginTop: 4, marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#2563eb', fontStyle: 'italic' }}>
+                        📍 Vị trí của bạn
+                      </Text>
+                    </View>
+                  )}
+
                   {selectedStationDetail.address && (
                     <View style={styles.stationAddressRow}>
                       <Feather
@@ -1350,11 +1413,11 @@ export default function MapScreen() {
                     <Text style={styles.stationStatusText}>
                       • {selectedStationDetail.status}
                     </Text>
-                    {!!selectedStationDetail.district && (
+                    {/* {!!selectedStationDetail.district && (
                       <Text style={styles.stationDistrictText}>
                         • {selectedStationDetail.district}
                       </Text>
-                    )}
+                    )} */}
                   </View>
 
                   {/* Show PM2.5 value if available */}
@@ -1388,6 +1451,12 @@ export default function MapScreen() {
                       <Text style={styles.metricText}>{selectedStationDetail.windSpeed} m/s</Text>
                     </View>
                   )}
+                  {selectedStationDetail.precipitation !== null && selectedStationDetail.precipitation !== undefined && (
+                    <View style={styles.metricRow}>
+                      <Feather name="cloud-rain" size={14} color="#6b7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.metricText}>{selectedStationDetail.precipitation} mm</Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -1403,7 +1472,7 @@ export default function MapScreen() {
                 }}
               >
                 <Text style={styles.detailButtonText}>
-                        Xem chi tiết & dự báo
+                        Xem chi tiết
                 </Text>
                 <Feather name="chevron-right" size={16} color="#ffffff" />
               </TouchableOpacity>

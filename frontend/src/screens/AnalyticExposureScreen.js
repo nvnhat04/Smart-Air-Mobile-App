@@ -92,7 +92,7 @@ export default function AnalyticExposureScreen() {
   const [showRadiusMenu, setShowRadiusMenu] = useState(false);
   const [analyticsData, setAnalyticsData] = useState([]);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'history', 'escape'
-  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'last3days', 'last7days'
+  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'last3days', 'last7days', or specific date (YYYY-MM-DD)
   const [exposureMode, setExposureMode] = useState('outdoor'); // 'outdoor', 'indoor', 'indoor_purifier'
   const [showExposureMenu, setShowExposureMenu] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState(7); // 1, 3, or 7 days
@@ -224,10 +224,11 @@ export default function AnalyticExposureScreen() {
     () => [
       { 
         id: 1, 
-        name: 'Ecopark, Hưng Yên', 
+        name: 'Khu đô thị Ecopark, Hưng Yên', 
         recommendation: 'Công viên sinh thái, hồ nước rộng, đạp xe dạo chơi',
         lat: 20.9578,
         lon: 105.9369,
+        img_url: 'https://ttgland.vn/Areas/Admin/Content/Fileuploads/images/khu-do-thi-ecopark-hung-yen-tong-the.jpg'
       },
       { 
         id: 2, 
@@ -235,13 +236,15 @@ export default function AnalyticExposureScreen() {
         recommendation: 'Hồ rộng, chạy bộ, picnic gia đình, không gian xanh',
         lat: 20.9995,
         lon: 105.8673,
+        img_url: 'https://mia.vn/media/uploads/blog-du-lich/trai-nghiem-thu-vi-cam-trai-tai-cong-vien-yen-so-3-1639940800.jpeg'
       },
       { 
         id: 3, 
         name: 'Làng cổ Đường Lâm', 
-        recommendation: 'Làng cổ 1200 năm, nhà sàn truyền thống, ẩm thực đặc sản',
+        recommendation: 'Làng cổ 1200 năm, nhà truyền thống, ẩm thực đặc sản',
         lat: 21.1594,
         lon: 105.4600,
+        img_url: 'https://cdn.vntrip.vn/cam-nang/wp-content/uploads/2017/11/lang-co-duong-lam-6-e1509792323651.jpg'
       },
       { 
         id: 4, 
@@ -249,6 +252,7 @@ export default function AnalyticExposureScreen() {
         recommendation: 'Thành cổ Sơn Tây, núi non hùng vĩ, không khí trong lành',
         lat: 21.1498,
         lon: 105.5192,
+        img_url: 'https://cdn.justfly.vn/700x464/media/202106/30/1625050495-thanh-co-son-tay-3.jpg'
       },
       { 
         id: 5, 
@@ -256,13 +260,15 @@ export default function AnalyticExposureScreen() {
         recommendation: 'Resort sinh thái, vườn cây ăn trái, trải nghiệm làm vườn',
         lat: 21.1300,
         lon: 105.3300,
+        img_url: 'https://chungcudep.net/wp-content/uploads/2019/06/nha-hang-sen-du-an-vuon-vua-resort-phu-tho.jpg'
       },
       { 
         id: 6, 
-        name: 'Ba Vì, Hà Nội', 
+        name: 'Vườn quốc gia Ba Vì, Hà Nội', 
         recommendation: 'Vườn quốc gia, suối nước nóng, cắm trại rừng thông',
         lat: 21.1400,
         lon: 105.2900,
+        img_url: 'https://reviewvilla.vn/wp-content/uploads/2022/06/vuon-quoc-gia-ba-vi-14.jpg'
       },
       { 
         id: 7, 
@@ -270,20 +276,23 @@ export default function AnalyticExposureScreen() {
         recommendation: 'Di tích lịch sử, chèo thuyền suối Yến, núi non hữu tình',
         lat: 20.6400,
         lon: 105.5700,
+        img_url: 'https://lh5.googleusercontent.com/M_3FhIKKa4tPnG3d4leZAgdpKmiUOr2gdaz_itT4Yj8g0DJOinb_hCsozYg8NfWBBkwsywYYIqaWgjj_EptAZTQvb8OhCgzPPQK5uqelN0TZX0GJW0h3eXZ24uBWfA8TSYBUwWdp71DiDHw36WPgq-U'
       },
       { 
         id: 8, 
-        name: 'Đại Lải, Vĩnh Phúc', 
+        name: 'Đại Lải, Phú Thọ', 
         recommendation: 'Hồ Đại Lải xanh mát, resort nghỉ dưỡng, thể thao nước',
         lat: 21.3500,
         lon: 105.5860,
+        img_url: 'https://cdn.tgdd.vn/Files/2021/07/05/1365854/nhung-kinh-nghiem-kham-pha-ho-dai-lai-vinh-phuc-202202141456396264.jpg'
       },
       { 
         id: 9, 
-        name: 'Tam Đảo, Vĩnh Phúc', 
+        name: 'Tam Đảo, Phú Thọ', 
         recommendation: 'Săn mây, check-in Thác Bạc, khí hậu mát mẻ quanh năm',
         lat: 21.3000,
         lon: 105.5500,
+        img_url: 'https://media.thuonghieuvaphapluat.vn/upload/2021/11/18/tam-dao-vinh-phuc-thac-mac-gia-trong-xe-qua-cao-bao-ve-xo-xat-voi-khach-du-lichfb2.jpg'
       },
       { 
         id: 10, 
@@ -291,6 +300,7 @@ export default function AnalyticExposureScreen() {
         recommendation: 'Hang động, vườn chim, kayaking, cảnh quan tuyệt đẹp',
         lat: 20.2215,
         lon: 105.8600,
+        img_url: 'https://35chill.vn/wp-content/uploads/2021/07/camnhi-202922032904-Vuon-chim-Thung-Nham-Ninh-Binh-2-1.jpg'
       },
     ],
     [],
@@ -320,6 +330,7 @@ export default function AnalyticExposureScreen() {
 
               // Use forecast API only (includes current data in response)
               const forecastData = await api.getPM25Forecast(dest.lat, dest.lon, 3);
+              console.log(`[AnalyticExposureScreen] Loaded forecast for ${dest.name}:`, forecastData.forecast[2]);
               
               // Get forecast for 48 hours from now
               const now = new Date();
@@ -327,7 +338,7 @@ export default function AnalyticExposureScreen() {
               const targetDateStr = target48h.toISOString().split('T')[0];
               
               // Get current data (first item in forecast)
-              const currentForecast = forecastData?.forecast?.[0];
+              const currentForecast = forecastData?.forecast?.[2];
               const currentAqi = currentForecast?.aqi || 0;
               
               // Find the forecast for 48h
@@ -351,8 +362,11 @@ export default function AnalyticExposureScreen() {
                 hasForecast,
                 distance,
                 driveTime,
-                temp: currentForecast?.weather?.temp || 20,
+                // temp: currentForecast?.weather?.temp || 20,
                 weatherType: currentForecast?.weather?.main === 'Clear' ? 'sun' : 'cloud',
+                precipitation: currentForecast?.rain_sum || 0,
+                temp_max: currentForecast?.temp_max || null,
+                temp_min: currentForecast?.temp_min || null,
               };
             } catch (error) {
               console.error(`[AnalyticExposureScreen] Failed to load ${dest.name}:`, error.message);
@@ -408,6 +422,7 @@ export default function AnalyticExposureScreen() {
     
     return historyData.filter(item => {
       const itemDate = new Date(item.timestamp);
+      const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
       
       switch (dateFilter) {
         case 'today':
@@ -421,7 +436,14 @@ export default function AnalyticExposureScreen() {
           sevenDaysAgo.setDate(today.getDate() - 7);
           return itemDate >= sevenDaysAgo;
         case 'all':
+          return true;
         default:
+          // Check if it's a specific date (YYYY-MM-DD format)
+          if (dateFilter && dateFilter.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [year, month, day] = dateFilter.split('-').map(Number);
+            const filterDate = new Date(year, month - 1, day);
+            return itemDateOnly.getTime() === filterDate.getTime();
+          }
           return true;
       }
     });
@@ -477,7 +499,7 @@ export default function AnalyticExposureScreen() {
 
   const maxAqi = Math.max(...analyticsData.map((d) => d.aqi * exposureMultiplier), 10);
 
-  const radiusOptions = [50, 100, 150, 200];
+  const radiusOptions = [20, 50, 70, 100, 120, 150, 200];
 
   return (
     <ScrollView
@@ -487,7 +509,7 @@ export default function AnalyticExposureScreen() {
     >
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.headerTitle}>Lịch sử &amp; dự báo</Text>
+          <Text style={styles.headerTitle}>Phơi nhiễm cá nhân</Text>
           <Text style={styles.headerSubtitle}>Phân tích chất lượng không khí 13 ngày</Text>
         </View>
         
@@ -821,6 +843,21 @@ export default function AnalyticExposureScreen() {
             <Text style={styles.exposureTag}>{statsPeriod === 1 ? 'HÔM QUA' : statsPeriod === 3 ? '3 NGÀY QUA' : '7 NGÀY QUA'}</Text>
             <Text style={styles.exposureAqi}>{pastAvg}</Text>
             <Text style={styles.exposureAqiLabel}>AQI Trung bình</Text>
+            
+            {/* Min/Max AQI */}
+            {locationStats && locationStats.min_aqi !== null && locationStats.max_aqi !== null && (
+              <View style={styles.minMaxContainer}>
+                <View style={styles.minMaxItem}>
+                  <Text style={styles.minMaxLabel}>Min</Text>
+                  <Text style={styles.minMaxValue}>{Math.round(locationStats.min_aqi * exposureMultiplier)}</Text>
+                </View>
+                <Text style={styles.minMaxSeparator}>•</Text>
+                <View style={styles.minMaxItem}>
+                  <Text style={styles.minMaxLabel}>Max</Text>
+                  <Text style={styles.minMaxValue}>{Math.round(locationStats.max_aqi * exposureMultiplier)}</Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.exposureDivider} />
 
@@ -1016,7 +1053,7 @@ export default function AnalyticExposureScreen() {
               <View key={dest.id} style={styles.weekendCardOuter}>
                 <ImageBackground
                   source={{
-                    uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&q=80',
+                    uri: dest.img_url,
                   }}
                   style={styles.weekendCardImage}
                   imageStyle={styles.weekendCardImageStyle}
@@ -1044,20 +1081,29 @@ export default function AnalyticExposureScreen() {
                         )}
                       </View>
                       <View style={styles.weekendAqiBadge}>
-                        <Text style={styles.weekendAqiLabel}>AQI</Text>
-                        <Text style={styles.weekendAqiValue}>{dest.aqi}</Text>
+                        <View style={[styles.weekendAqiBadge, { backgroundColor: getAQIColor(dest.aqi) }]}> 
+                          <Text style={styles.weekendAqiLabel}>AQI {dest.aqi}</Text>
+                          {/* <Text style={styles.weekendAqiValue}>{dest.aqi}</Text> */}
+                        </View>
                       </View>
                     </View>
 
                     <View style={styles.weekendStatsRow}>
                       <View style={styles.weekendStatBox}>
-                        <Text style={styles.weekendStatLabel}>Độ sạch</Text>
-                        <Text style={styles.weekendStatValue}>Gấp {cleanRatio} lần</Text>
+                        <Text style={styles.weekendStatLabel}>
+                          {cleanRatio > 1 ? 'Độ sạch' : 'Độ ô nhiễm'}
+                        </Text>
+                        <Text style={styles.weekendStatValue}>Gấp {cleanRatio > 1 ? cleanRatio : (1 / cleanRatio).toFixed(1)} lần</Text>
                       </View>
                       <View style={styles.weekendStatBox}>
                         <Text style={styles.weekendStatLabel}>Thời tiết</Text>
-                        <Text style={styles.weekendStatValue}>{dest.temp}°C</Text>
+                        <Text style={styles.weekendStatValue}>{dest.temp_min}°C - {dest.temp_max}°C</Text>
                       </View>
+                      <View style={styles.weekendStatBox}>
+                        <Text style={styles.weekendStatLabel}>Lượng mưa</Text>
+                        <Text style={styles.weekendStatValue}>{dest.precipitation} mm</Text>
+                      </View>
+                      
                     </View>
 
                     <Text style={styles.weekendRecommendation}>💡 {dest.recommendation}</Text>
@@ -1095,6 +1141,10 @@ export default function AnalyticExposureScreen() {
                 {dateFilter === 'last3days' && ' • 3 ngày qua'}
                 {dateFilter === 'last7days' && ' • 7 ngày qua'}
                 {dateFilter === 'all' && ` • Tất cả (${historyData.length} tổng)`}
+                {dateFilter && dateFilter.match(/^\d{4}-\d{2}-\d{2}$/) && (() => {
+                  const [year, month, day] = dateFilter.split('-');
+                  return ` • Ngày ${day}/${month}/${year}`;
+                })()}
               </Text>
             </View>
             <TouchableOpacity
@@ -1134,35 +1184,27 @@ export default function AnalyticExposureScreen() {
                 </Text>
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={[styles.filterButton, dateFilter === 'last3days' && styles.filterButtonActive]}
-                onPress={() => setDateFilter('last3days')}
-                activeOpacity={0.7}
-              >
-                <Feather 
-                  name="calendar" 
-                  size={14} 
-                  color={dateFilter === 'last3days' ? '#1d4ed8' : '#64748b'} 
-                />
-                <Text style={[styles.filterButtonText, dateFilter === 'last3days' && styles.filterButtonTextActive]}>
-                  3 ngày qua
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.filterButton, dateFilter === 'last7days' && styles.filterButtonActive]}
-                onPress={() => setDateFilter('last7days')}
-                activeOpacity={0.7}
-              >
-                <Feather 
-                  name="calendar" 
-                  size={14} 
-                  color={dateFilter === 'last7days' ? '#1d4ed8' : '#64748b'} 
-                />
-                <Text style={[styles.filterButtonText, dateFilter === 'last7days' && styles.filterButtonTextActive]}>
-                  7 ngày qua
-                </Text>
-              </TouchableOpacity>
+              {/* Specific date buttons for last 7 days */}
+              {Array.from({ length: 7 }, (_, i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - (i + 1));
+                const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                const displayDate = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const isActive = dateFilter === dateKey;
+                
+                return (
+                  <TouchableOpacity
+                    key={dateKey}
+                    style={[styles.filterButton, isActive && styles.filterButtonActive]}
+                    onPress={() => setDateFilter(dateKey)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterButtonText, isActive && styles.filterButtonTextActive]}>
+                      {displayDate}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
 
@@ -1807,6 +1849,33 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textAlign: 'center',
   },
+  minMaxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  minMaxItem: {
+    alignItems: 'center',
+  },
+  minMaxLabel: {
+    fontSize: 9,
+    color: '#9ca3af',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  minMaxValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginTop: 2,
+  },
+  minMaxSeparator: {
+    fontSize: 12,
+    color: '#d1d5db',
+    marginHorizontal: 12,
+  },
   exposureDivider: {
     borderTopWidth: 1,
     borderStyle: 'dashed',
@@ -2171,17 +2240,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(190, 223, 195, 0.72)',
+    // backgroundColor: 'rgba(190, 223, 195, 0.72)',
   },
   weekendAqiLabel: {
     fontSize: 10,
-    color: 'rgba(2, 100, 15, 0.72)',
+    color: 'rgba(255, 255, 255, 0.72)',
     fontWeight: '600',
   },
   weekendAqiValue: {
     fontSize: 13,
     fontWeight: '800',
-    color: 'rgba(2, 100, 15, 0.72)',
+    color: 'rgba(255, 255, 255, 0.72)',
   },
   weekendStatsRow: {
     flexDirection: 'row',
@@ -2202,7 +2271,7 @@ const styles = StyleSheet.create({
   weekendStatValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: 'rgba(157, 187, 231, 0.72)',
+    color: 'rgba(255, 255, 255, 0.72)',
   },
   weekendRecommendation: {
     marginTop: 6,
