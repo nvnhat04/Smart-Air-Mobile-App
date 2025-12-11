@@ -10,23 +10,23 @@ function generateWeeklyData(baseColor) {
   const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
   const today = new Date();
 
-  return Array.from({ length: 7 }).map((_, idx) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + idx);
-    const dayOfWeek = d.getDay();
-    const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(
-      d.getMonth() + 1,
-    ).padStart(2, '0')}`;
+    return Array.from({ length: 7 }).map((_, idx) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + idx);
+      const dayOfWeek = d.getDay();
+      const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(
+        d.getMonth() + 1,
+      ).padStart(2, '0')}`;
 
-    const val = 20 + Math.floor(Math.random() * 130);
+      const val = 20 + Math.floor(Math.random() * 130);
 
-    return {
-      label: daysShort[dayOfWeek],
-      date: dateStr,
-      temp: 27 + Math.floor(Math.random() * 6),
-      aqi: val,
-    };
-  });
+      return {
+        label: daysShort[dayOfWeek],
+        date: dateStr,
+        temp: 27 + Math.floor(Math.random() * 6),
+        aqi: val,
+      };
+    });
 }
 
 function getAQIBadgeColor(score) {
@@ -50,7 +50,8 @@ export default function DetailStationScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const station = route.params?.station;
-
+  const selectedDay = route.params?.selectedDay;
+console.log('🔍 selectedDay in route params:', selectedDay);
   const [realtimeData, setRealtimeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState(null);
@@ -171,11 +172,20 @@ export default function DetailStationScreen() {
         advice: getHealthAdvice(100, userGroup),
       };
     }
-    
-    // Nếu có realtime data, dùng data mới nhất
-    const latestData = realtimeData?.latest;
+    let dayData = null;
+    if (selectedDay && realtimeData?.weekly) {
+      dayData = realtimeData.weekly.find(d => d.dateKey === selectedDay.isoDate);
+    }
+    console.log('🔍 selectedDay data found:', dayData);
+    // console.log('🔍 realtimeData latest:', realtimeData?.weekly);
+    // Nếu không có selectedDay hoặc không tìm thấy, dùng latestData như cũ
+    const latestData = dayData || realtimeData?.latest;
     const currentAqi = latestData?.aqi || station.aqi || 80;
     const healthAdvice = getHealthAdvice(currentAqi, userGroup);
+    // Nếu có realtime data, dùng data mới nhất
+    // const latestData = realtimeData?.latest;
+    // const currentAqi = latestData?.aqi || station.aqi || 80;
+    // const healthAdvice = getHealthAdvice(currentAqi, userGroup);
     
     // Calculate pm25 as number
     const pm25Value = latestData?.pm25 || station.pm25 || (currentAqi * 0.6);
@@ -194,7 +204,7 @@ export default function DetailStationScreen() {
     
     console.log('📊 New advice:', healthAdvice?.text?.substring(0, 50) + '...');
     return result;
-  }, [station, realtimeData, userGroup]);
+  }, [station, realtimeData, userGroup, selectedDay]);
 
   // Sử dụng realtime data nếu có, không thì fallback về mock data
   const weekly = useMemo(() => {
@@ -327,7 +337,7 @@ export default function DetailStationScreen() {
 
           <View style={styles.headerTopRight}>
             <View style={styles.dateChip}>
-              <Text style={styles.dateChipValue}>{now.displayLabel}</Text>
+              <Text style={styles.dateChipValue}>{selectedDay?.label} - {selectedDay?.dateStr}</Text>
             </View>
           </View>
 
@@ -824,6 +834,13 @@ const styles = StyleSheet.create({
     fontSize: 52,
     fontWeight: '900',
     color: '#ffffff',
+  },
+  aqiLabel: {
+    position: 'absolute',
+    top: 8,
+    fontSize: 18,
+    color: '#ffffff',
+    fontWeight: '800',
   },
   statusPill: {
     marginTop: 4,

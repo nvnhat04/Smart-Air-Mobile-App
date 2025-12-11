@@ -220,6 +220,7 @@ export const useLocationTracking = (enabled = true) => {
       }
 
       // Lưu vào server (với spam check)
+      console.log('[useLocationTracking] Attempting to save current location:', { latitude, longitude, finalAqi, finalPm25 , finalAddress});
       const result = await saveLocationToServer(userId, latitude, longitude, finalAqi, finalAddress, finalPm25, true);
 
       // Chỉ cập nhật lastSaveTimeRef nếu thực sự lưu thành công (không bị skip)

@@ -170,7 +170,9 @@ const generateLeafletHTML = (baseUrl) => `
         if (aqi <= 50) return '#22c55e';
         if (aqi <= 100) return '#eab308';
         if (aqi <= 150) return '#f97316';
-        return '#ef4444';
+        if (aqi <= 200) return '#ef4444';
+        if (aqi <= 300) return '#a21caf';
+        return '#7f1d1d';
       }
 
       function getStatusText(aqi) {
@@ -1315,7 +1317,7 @@ export default function MapScreen() {
                 ]}
                 onPress={() => {
                   setSelectedDayIndex(idx);
-                  setDayMenuOpen(false);
+                  // setDayMenuOpen(true);
                   if (webviewRef.current && opt.isoDate) {
                     const js = `window.__setWmsDate && window.__setWmsDate('${opt.isoDate}'); true;`;
                     webviewRef.current.injectJavaScript(js);
@@ -1461,13 +1463,13 @@ export default function MapScreen() {
               </View>
 
               {/* Button Xem chi tiết & dự báo - hiển thị cho mọi điểm trong ngày hôm nay */}
-              {selectedDay === dayOptions[0] && (
+              {/* {selectedDay === dayOptions[0] && (
               <TouchableOpacity
                 style={styles.detailButton}
                 activeOpacity={0.85}
                 onPress={() => {
                   if (selectedStationDetail) {
-                    navigation.navigate('DetailStation', { station: selectedStationDetail });
+                    navigation.navigate('DetailStation', { station: selectedStationDetail, selectedDay });
                   }
                 }}
               >
@@ -1476,7 +1478,21 @@ export default function MapScreen() {
                 </Text>
                 <Feather name="chevron-right" size={16} color="#ffffff" />
               </TouchableOpacity>
-              )}
+              )} */}
+               <TouchableOpacity
+                style={styles.detailButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (selectedStationDetail) {
+                    navigation.navigate('DetailStation', { station: selectedStationDetail, selectedDay: selectedDay });
+                  }
+                }}
+              >
+                <Text style={styles.detailButtonText}>
+                        Xem chi tiết
+                </Text>
+                <Feather name="chevron-right" size={16} color="#ffffff" />
+              </TouchableOpacity>
             </View>
             
           )}

@@ -3,12 +3,12 @@ import { View, Text, StyleSheet } from 'react-native';
 
 export default function AqiBar() {
   const segments = [
-    { color: '#22c55e', label: '0–50' },
-    { color: '#eab308', label: '51–100' },
-    { color: '#f97316', label: '101–150' },
-    { color: '#ef4444', label: '151–200' },
-    { color: '#7c3aed', label: '201–300' },
-    { color: '#7f1d1d', label: '300+' },
+    { color: '#00ab78', label: '0–50' },
+    { color: '#ffff00', label: '51–100' },
+    { color: '#ff7e00', label: '101–150' },
+    { color: '#d52827', label: '151–200' },
+    { color: '#8f3f97', label: '201–300' },
+    { color: '#7e0023', label: '300+' },
   ];
 
   return (
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentText: {
-    color: '#f9fafb',
+    color: '#d1d2d4ff',
     fontSize: 12,
     fontWeight: '450',
   },
