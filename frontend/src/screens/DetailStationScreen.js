@@ -1,6 +1,6 @@
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { UserGroupSelector } from '../components/ui';
 import { BASE_URL } from '../services/api';
@@ -46,6 +46,15 @@ function getAQIColor(score) {
   return '#7c2d12'; // Nâu đỏ - Nguy hại
 }
 
+function getAQIIcon(score) {
+  if (score <= 50) return '😊'; // Tốt - Mặt cười
+  if (score <= 100) return '😐'; // Trung bình - Bình thường
+  if (score <= 150) return '😷'; // Kém - Đeo khẩu trang
+  if (score <= 200) return '😨'; // Xấu - Lo lắng
+  if (score <= 300) return '😱'; // Rất xấu - Kinh hãi
+  return '☠️'; // Nguy hại - Nguy hiểm
+}
+
 export default function DetailStationScreen() {
   const route = useRoute();
   const navigation = useNavigation();
@@ -56,6 +65,7 @@ console.log('🔍 selectedDay in route params:', selectedDay);
   const [loading, setLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState(null);
   const [userGroup, setUserGroup] = useState('normal'); // 'normal' or 'sensitive'
+  const [chartWidth, setChartWidth] = useState(Dimensions.get('window').width - 100); // Chart width for responsive
 
   // Handle user group change with logging
   const handleUserGroupChange = (newGroup) => {
@@ -236,19 +246,25 @@ console.log('🔍 selectedDay in route params:', selectedDay);
   }, [weekly]);
 
   const chartData = useMemo(() => {
-    if (!weekly || weekly.length === 0) return { path: '', points: [] };
+    if (!weekly || weekly.length === 0) return { path: '', points: [], width: chartWidth };
     
     // Filter ra các ngày có data
     const validData = weekly.filter(w => w.aqi !== null && w.aqi !== undefined);
     
-    if (validData.length === 0) return { path: '', points: [] };
+    if (validData.length === 0) return { path: '', points: [], width: chartWidth };
     
     const values = validData.map((w) => w.aqi);
-    const max = Math.max(...values, 10);
-    const min = Math.min(...values, 0);
+    const dataMax = Math.max(...values);
+    const dataMin = Math.min(...values);
+    
+    // Thêm padding 20% cho min/max để chart có không gian biến thiên rõ hơn
+    const padding = (dataMax - dataMin) * 0.2 || 10;
+    const max = dataMax + padding;
+    const min = Math.max(0, dataMin - padding); // Không cho min < 0
     const range = max - min || 1;
-    const w = 260;
-    const h = 70;
+    
+    const w = chartWidth; // Sử dụng dynamic width
+    const h = 120; // Tăng height lên để chart lớn hơn
     
     // Tính step dựa trên tổng số ngày (kể cả null)
     const step = weekly.length > 1 ? w / (weekly.length - 1) : w;
@@ -261,7 +277,8 @@ console.log('🔍 selectedDay in route params:', selectedDay);
       if (item.aqi !== null && item.aqi !== undefined) {
         const x = idx * step;
         const norm = (item.aqi - min) / range;
-        const y = h - norm * (h - 8) - 4;
+        // Tăng margin top/bottom để có không gian rõ hơn
+        const y = h - norm * (h - 24) - 12;
         
         // Lưu thông tin điểm
         points.push({
@@ -275,7 +292,7 @@ console.log('🔍 selectedDay in route params:', selectedDay);
           precipitation: item.precipitation,
           pm25: item.pm25,
           idx,
-          color: getAQIColor(item.aqi), // Thêm màu cho điểm
+          color: getAQIColor(item.aqi), // Thêm màu theo AQI
         });
         
         // Check nếu là điểm đầu tiên hoặc điểm trước đó là null
@@ -287,11 +304,22 @@ console.log('🔍 selectedDay in route params:', selectedDay);
       }
     });
     
-    // Tạo labels cho trục Y (làm tròn đến bội số 25 hoặc 50)
-    const yMax = Math.ceil(max / 25) * 25;
-    const yMin = Math.floor(min / 25) * 25;
+    // Tạo labels cho trục Y
+    // Sử dụng min/max đã có padding để labels phù hợp với vùng dữ liệu
+    const yMax = Math.ceil(max / 10) * 10; // Làm tròn lên bội số 10
+    const yMin = Math.floor(min / 10) * 10; // Làm tròn xuống bội số 10
     const yRange = yMax - yMin || 50;
-    const yStep = yRange <= 100 ? 25 : 50;
+    
+    // Tính step cho labels - ít nhất 3 labels, nhiều nhất 5 labels
+    let yStep;
+    if (yRange <= 50) {
+      yStep = 10;
+    } else if (yRange <= 100) {
+      yStep = 25;
+    } else {
+      yStep = 50;
+    }
+    
     const yLabels = [];
     for (let val = yMin; val <= yMax; val += yStep) {
       yLabels.push(val);
@@ -303,8 +331,10 @@ console.log('🔍 selectedDay in route params:', selectedDay);
       yAxisLabels: yLabels,
       yMin,
       yMax,
+      width: w,
+      height: h,
     };
-  }, [weekly]);
+  }, [weekly, chartWidth]);
 
   return (
     <View style={styles.root}>
@@ -335,38 +365,43 @@ console.log('🔍 selectedDay in route params:', selectedDay);
             <Text style={styles.backIcon}>{'‹'}</Text>
           </TouchableOpacity>
 
-          <View style={styles.headerTopRight}>
-            <View style={styles.dateChip}>
-              <Text style={styles.dateChipValue}>{selectedDay?.label} - {selectedDay?.dateStr}</Text>
-            </View>
-          </View>
-
-          <View style={styles.headerCenter}>
+          {/* Location Chip - Riêng biệt phía trên */}
+          <View style={styles.locationChipWrapper}>
             <View style={styles.locationChip}>
+              <Text style={styles.locationText}>
+                {selectedDay?.label} - {selectedDay?.dateStr}
+              </Text>
               <Text style={styles.locationText}>
                 {data.name || 'Trạm quan trắc'}
               </Text>
             </View>
+          </View>
 
-            <View style={styles.aqiCircleWrapper}>
-              <View style={styles.aqiCircleGlow} />
-              <Text style={styles.aqiNumber}>{data.aqi ?? 0}</Text>
-            </View>
-
-            <View style={styles.statusPill}>
-              <Text style={styles.statusPillText}>{data.status || 'Trung bình'}</Text>
-            </View>
-
-            <View style={styles.pm25Card}>
-              <Text style={styles.pm25Label}>PM2.5</Text>
+          {/* Header Center - AQI và Info */}
+          <View style={styles.headerCenter}>
+            {/* Cột trái: Số AQI */}
+            <View style={styles.aqiColumn}>
+              <Text style={styles.aqiLabelText}>AQI</Text>
+              <View style={styles.aqiCircleWrapper}>
+                <View style={styles.aqiCircleGlow} />
+                <Text style={styles.aqiNumber}>{data.aqi ?? 0}</Text>
+              </View>
+              
+              <Text style={styles.pm25Label}>PM2.5:</Text>
               <Text style={styles.pm25Value}>
-                {typeof data.pm25 === 'number' ? data.pm25.toFixed(2) : data.pm25} µg/m³
+                {typeof data.pm25 === 'number' ? data.pm25.toFixed(1) : data.pm25} µg/m³
               </Text>
+              
             </View>
-{/* 
-            <View style={styles.adviceBubble}>
-              <Text style={styles.adviceText}>💡 {data.advice?.text}</Text>
-            </View> */}
+
+            {/* Cột phải: Thông tin chi tiết */}
+            <View style={styles.infoColumn}>
+            <Text style={styles.statusIcon}>{getAQIIcon(data.aqi || 0)}</Text>
+              <View style={styles.statusPill}>
+                
+                <Text style={styles.statusPillText}>{data.status || 'Trung bình'}</Text>
+              </View>
+              </View>
           </View>
         </View>
 
@@ -377,32 +412,42 @@ console.log('🔍 selectedDay in route params:', selectedDay);
               <View style={[styles.metricIconBox, { backgroundColor: '#ffedd5' }]}>
                 <Text style={styles.metricIcon}>🌡️</Text>
               </View>
-              <Text style={styles.metricValue}>{data.temp}°</Text>
-              <Text style={styles.metricLabel}>Nhiệt độ</Text>
+              <View style={styles.metricInfoBox}>
+                <Text style={styles.metricLabel}>Nhiệt độ</Text>
+                <Text style={styles.metricValue}>{data.temp}°</Text>
+              </View>
             </View>
 
             <View style={styles.metricCard}>
               <View style={[styles.metricIconBox, { backgroundColor: '#dbeafe' }]}>
                 <Text style={styles.metricIcon}>💧</Text>
               </View>
-              <Text style={styles.metricValue}>{data.humidity}%</Text>
-              <Text style={styles.metricLabel}>Độ ẩm</Text>
+              <View style={styles.metricInfoBox}>
+                <Text style={styles.metricLabel}>Độ ẩm</Text>
+                <Text style={styles.metricValue}>{data.humidity}%</Text>
+              </View>
             </View>
 
             <View style={styles.metricCard}>
               <View style={[styles.metricIconBox, { backgroundColor: '#e5e7eb' }]}>
                 <Text style={styles.metricIcon}>💨</Text>
               </View>
-              <Text style={styles.metricValue}>{data.wind} km/h</Text>
-              <Text style={styles.metricLabel}>Gió</Text>
+              <View style={styles.metricInfoBox}>
+                <Text style={styles.metricLabel}>Gió</Text>
+                <Text style={styles.metricValue}>{data.wind} km/h</Text>
+              </View>
             </View>
 
             <View style={styles.metricCard}>
-              <View style={[styles.metricIconBox, { backgroundColor: '#dbeafe' }]}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#e5e7eb' }]}>
                 <Text style={styles.metricIcon}>🌧️</Text>
-              </View>
-              <Text style={styles.metricValue}>{data.precipitation} mm</Text>
+              </View>              
+              <View style={styles.metricInfoBox}>
               <Text style={styles.metricLabel}>Lượng mưa</Text>
+            
+              <Text style={styles.metricValue}>{data.precipitation} mm</Text>
+              </View> 
+              
             </View>
           </View>
 
@@ -464,10 +509,11 @@ console.log('🔍 selectedDay in route params:', selectedDay);
             {/* Biểu đồ đường AQI */}
             <View style={styles.weeklyChartContainer}>
               {/* Trục Y - Labels AQI */}
-              <View style={styles.yAxisLabels}>
+              <View style={[styles.yAxisLabels, { height: chartData.height || 120 }]}>
                 {chartData.yAxisLabels && chartData.yAxisLabels.slice().reverse().map((label, idx) => {
                   const totalLabels = chartData.yAxisLabels.length;
-                  const spacing = 70 / (totalLabels - 1 || 1);
+                  const chartHeight = chartData.height || 120;
+                  const spacing = chartHeight / (totalLabels - 1 || 1);
                   const topPos = idx * spacing;
                   
                   return (
@@ -485,33 +531,42 @@ console.log('🔍 selectedDay in route params:', selectedDay);
               </View>
               
               {/* Chart area */}
-              <View style={styles.weeklyChartWrapper}>
-                <Svg width={260} height={70}>
+              <View 
+                style={styles.weeklyChartWrapper}
+                onLayout={(event) => {
+                  const { width } = event.nativeEvent.layout;
+                  if (width > 0 && width !== chartWidth) {
+                    setChartWidth(width);
+                  }
+                }}
+              >
+                <Svg width={chartData.width || chartWidth} height={chartData.height || 120}>
                   <Defs>
-                    {/* Gradient cho background AQI zones */}
+                    {/* Gradient cho background AQI zones - map theo levels */}
                     <LinearGradient id="aqiGradient" x1="0" y1="0" x2="0" y2="1">
-                      <Stop offset="0%" stopColor="#7c2d12" stopOpacity="0.08" />
-                      <Stop offset="16.67%" stopColor="#a855f7" stopOpacity="0.08" />
-                      <Stop offset="33.33%" stopColor="#ef4444" stopOpacity="0.08" />
-                      <Stop offset="50%" stopColor="#f97316" stopOpacity="0.08" />
-                      <Stop offset="66.67%" stopColor="#eab308" stopOpacity="0.08" />
-                      <Stop offset="100%" stopColor="#22c55e" stopOpacity="0.08" />
+                      <Stop offset="0%" stopColor="#7c2d12" stopOpacity="0.5" />
+                      <Stop offset="16.67%" stopColor="#a855f7" stopOpacity="0.5" />
+                      <Stop offset="33.33%" stopColor="#ef4444" stopOpacity="0.5" />
+                      <Stop offset="50%" stopColor="#f97316" stopOpacity="0.5" />
+                      <Stop offset="66.67%" stopColor="#eab308" stopOpacity="0.5" />
+                      <Stop offset="100%" stopColor="#22c55e" stopOpacity="0.5" />
                     </LinearGradient>
                   </Defs>
                   
                   {/* Background gradient AQI zones */}
-                  <Rect x="0" y="0" width="260" height="70" fill="url(#aqiGradient)" />
+                  <Rect x="0" y="0" width={chartData.width || chartWidth} height={chartData.height || 120} fill="url(#aqiGradient)" />
                   
                   {/* Gridlines ngang */}
                   {chartData.yAxisLabels && chartData.yAxisLabels.map((label, idx) => {
                     const totalLabels = chartData.yAxisLabels.length;
-                    const spacing = 70 / (totalLabels - 1 || 1);
-                    const y = 70 - (idx * spacing);
+                    const chartHeight = chartData.height || 120;
+                    const spacing = chartHeight / (totalLabels - 1 || 1);
+                    const y = chartHeight - (idx * spacing);
                     
                     return (
                       <Path
                         key={`grid-${label}`}
-                        d={`M 0 ${y} L 260 ${y}`}
+                        d={`M 0 ${y} L ${chartData.width || chartWidth} ${y}`}
                         stroke="#e5e7eb"
                         strokeWidth={1}
                         strokeDasharray="4,4"
@@ -520,7 +575,7 @@ console.log('🔍 selectedDay in route params:', selectedDay);
                     );
                   })}
                   
-                  {/* Đường line AQI - vẽ từng segment với màu riêng */}
+                  {/* Đường line AQI - màu đơn giản */}
                   {chartData.points.map((point, idx) => {
                     if (idx === 0) return null;
                     const prevPoint = chartData.points[idx - 1];
@@ -528,12 +583,11 @@ console.log('🔍 selectedDay in route params:', selectedDay);
                     // Kiểm tra nếu có gap (ngày không có data giữa 2 điểm)
                     if (point.idx - prevPoint.idx > 1) return null;
                     
-                    // Dùng màu của điểm hiện tại
                     return (
                       <Path
                         key={`segment-${idx}`}
                         d={`M ${prevPoint.x} ${prevPoint.y} L ${point.x} ${point.y}`}
-                        stroke={point.color}
+                        stroke="#2563eb"
                         strokeWidth={3}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -541,14 +595,14 @@ console.log('🔍 selectedDay in route params:', selectedDay);
                     );
                   })}
                   
-                  {/* Vẽ các điểm có thể chạm */}
+                  {/* Vẽ các điểm có thể chạm - màu theo AQI */}
                   {chartData.points.map((point, idx) => (
                     <Circle
                       key={idx}
                       cx={point.x}
                       cy={point.y}
-                      r={selectedPoint?.idx === point.idx ? 6 : 4}
-                      fill={point.color}
+                      r={selectedPoint?.idx === point.idx ? 7 : 5}
+                      fill={point.color || '#2563eb'}
                       stroke="#ffffff"
                       strokeWidth={2}
                       onPress={() => setSelectedPoint(point)}
@@ -622,9 +676,9 @@ console.log('🔍 selectedDay in route params:', selectedDay);
             </View>
 
             {/* Nhãn ngày trục dưới */}
-            <View style={styles.weeklyDatesRow}>
+            <View style={[styles.weeklyDatesRow, { width: chartData.width || chartWidth }]}>
               {weekly.map((item, idx) => {
-                const step = weekly.length > 1 ? 260 / (weekly.length - 1) : 130;
+                const step = weekly.length > 1 ? (chartData.width || chartWidth) / (weekly.length - 1) : (chartData.width || chartWidth) / 2;
                 const leftPosition = idx * step;
                 
                 return (
@@ -673,9 +727,8 @@ console.log('🔍 selectedDay in route params:', selectedDay);
             >
               {weekly.map((item) => {
                 const hasData = item.aqi !== null && item.aqi !== undefined;
-                const badge = hasData ? getAQIBadgeColor(item.aqi) : { bg: '#f3f4f6', text: '#9ca3af' };
-                const cardBgColor = hasData ? getAQIColor(item.aqi) : '#f3f4f6';
-                const textColor = hasData ? '#ffffff' : '#9ca3af';
+                const aqiBgColor = hasData ? getAQIColor(item.aqi) : '#f3f4f6';
+                const aqiTextColor = hasData ? '#ffffff' : '#9ca3af';
                 
                 // Calculate temp display with min/max if available
                 const tempDisplay = hasData ? (
@@ -687,16 +740,15 @@ console.log('🔍 selectedDay in route params:', selectedDay);
                 return (
                   <View key={item.date} style={[
                     styles.forecastCard,
-                    { backgroundColor: cardBgColor },
                     !hasData && styles.forecastCardNoData
                   ]}>
-                    <Text style={[styles.forecastDay, { color: textColor }]}>{item.label}</Text>
-                    <Text style={[styles.forecastDate, { color: textColor, opacity: 0.9 }]}>{item.date}</Text>
-                    <Text style={[styles.forecastTemp, { color: textColor }]}>
+                    <Text style={styles.forecastDay}>{item.label}</Text>
+                    <Text style={[styles.forecastDate, { opacity: 0.8 }]}>{item.date}</Text>
+                    <Text style={styles.forecastTemp}>
                       {tempDisplay}
                     </Text>
                     {hasData && item.precipitation !== null && item.precipitation !== undefined && (
-                      <Text style={[styles.forecastPrecip, { color: textColor }]}>
+                      <Text style={styles.forecastPrecip}>
                         🌧️ {item.precipitation}mm
                       </Text>
                     )}
@@ -704,16 +756,16 @@ console.log('🔍 selectedDay in route params:', selectedDay);
                       style={[
                         styles.forecastAqiBadge,
                         { 
-                          backgroundColor: hasData ? 'rgba(255,255,255,0.25)' : badge.bg,
-                          borderWidth: hasData ? 1 : 0,
-                          borderColor: hasData ? 'rgba(255,255,255,0.4)' : 'transparent'
+                          backgroundColor: aqiBgColor,
+                          borderWidth: hasData ? 0 : 1,
+                          borderColor: hasData ? 'transparent' : '#e5e7eb'
                         },
                       ]}
                     >
                       <Text
                         style={[
                           styles.forecastAqiText,
-                          { color: hasData ? textColor : badge.text, fontWeight: '700' },
+                          { color: aqiTextColor, fontWeight: '700' },
                         ]}
                       >
                         {hasData ? `${item.aqi} AQI` : 'Chưa có'}
@@ -744,7 +796,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 56 : 40,
-    paddingBottom: 32,
+    paddingBottom: 24,
     paddingHorizontal: 16,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
@@ -753,17 +805,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Platform.OS === 'ios' ? 52 : 36,
     left: 14,
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.32)',
+    backgroundColor: 'rgba(255, 255, 255, 0)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backIcon: {
     color: '#ffffff',
     fontSize: 40,
-    marginTop: -4,
+    marginTop: 0,
   },
   headerTopRight: {
     position: 'absolute',
@@ -790,20 +842,46 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
   },
-  headerCenter: {
-    marginTop: 40,
+  locationChipWrapper: {
+    width: '100%',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  locationChip: {
+  headerCenter: {
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  aqiColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  infoColumn: {
+    flex: 1,
+    gap: 8,
+    alignItems: 'center',
+  },
+  aqiLabelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 4,
+    opacity: 0.95,
+  },
+  locationChip: {
+    flexDirection: 'column',
+    alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.5)',
-    marginBottom: 12,
+    gap: 2,
   },
   locationDot: {
     fontSize: 10,
@@ -812,26 +890,26 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 13,
-    color: '#f9fafb',
+    color: '#ffffff',
     fontWeight: '600',
+    textAlign: 'center',
   },
   aqiCircleWrapper: {
-    width: 140,
+    width: 100,
     height: 100,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
   },
   aqiCircleGlow: {
     position: 'absolute',
-    width: 110,
-    height: 110,
-    borderRadius: 999,
+    width: 90,
+    height: 90,
+    borderRadius: 40,
     backgroundColor: 'rgba(255,255,255,0.35)',
     opacity: 0.9,
   },
   aqiNumber: {
-    fontSize: 52,
+    fontSize: 44,
     fontWeight: '900',
     color: '#ffffff',
   },
@@ -843,36 +921,49 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   statusPill: {
-    marginTop: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.28)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.6)',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statusIcon: {
+    fontSize: 90,
   },
   statusPillText: {
-    fontSize: 13,
+    fontSize: 24,
     fontWeight: '700',
     color: '#ffffff',
   },
   pm25Card: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.3)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'center',
+  },
+  pm25Icon: {
+    fontSize: 14,
   },
   pm25Label: {
     fontSize: 11,
     color: '#ffffff',
     opacity: 0.9,
+    fontWeight: '600',
   },
   pm25Value: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#ffffff',
   },
   adviceBubble: {
@@ -897,39 +988,46 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 16,
-    gap: 5,
+    gap: 8,
   },
   metricCard: {
     flexBasis: '48%',
-    minWidth: 80,
+    minWidth: 100,
     borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e5e7eb',
     alignItems: 'center',
+    flexDirection: "row",
+    gap: 10,
+  },
+  metricInfoBox: {
+    flexDirection: "column",
+    alignItems: 'flex-start',
+    flex: 1,
   },
   metricIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
   },
   metricIcon: {
-    fontSize: 18,
+    fontSize: 24,
   },
   metricValue: {
-    fontSize: 14,
+    fontSize: 22,
     fontWeight: '800',
     color: '#111827',
+    lineHeight: 26,
   },
   metricLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#6b7280',
-    marginTop: 2,
+    fontWeight: '500',
   },
   healthCard: {
     borderRadius: 24,
@@ -1052,7 +1150,6 @@ const styles = StyleSheet.create({
   },
   yAxisLabels: {
     width: 35,
-    height: 70,
     position: 'relative',
     justifyContent: 'space-between',
     marginRight: 8,
@@ -1067,12 +1164,12 @@ const styles = StyleSheet.create({
   weeklyChartWrapper: {
     paddingVertical: 4,
     paddingHorizontal: 4,
+    flex: 1,
   },
   weeklyDatesRow: {
     position: 'relative',
     height: 20,
-    width: 260,
-    left: "10%",
+    marginLeft: 43, // Width of yAxisLabels (35) + marginRight (8)
     marginTop: 2,
   },
   weeklyDateLabel: {
@@ -1211,7 +1308,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   forecastAqiText: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '700',
   },
   forecastHintText: {
