@@ -152,12 +152,18 @@ export const fetchStations = async () => {
   try {
     console.log('🔄 Fetching stations from CEM API...');
     const response = await fetchWithTimeout(
-      `${CEM_API_BASE}/stations/search/findByIsPublicAndStationTypeAndNullableProvinceId?stationType=4&isPublic=true`,
+      'https://envisoft.gov.vn/eos/services/call/json/get_stations',
       {
-        method: 'GET',
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        body: JSON.stringify({
+          is_qi: true,
+          is_public: true,
+          qi_type: 'aqi',
+        }),
       },
       10000 // 10 second timeout
     );
@@ -167,11 +173,11 @@ export const fetchStations = async () => {
     }
 
     const data = await response.json();
-    console.log('✅ CEM Stations received:', data._embedded?.stations?.length || 0);
+    console.log('✅ CEM Stations received:', data.stations?.length || 0);
 
     // Parse dữ liệu trạm từ API
-    if (data._embedded && data._embedded.stations) {
-      return data._embedded.stations.map(station => {
+    if (data.stations && Array.isArray(data.stations)) {
+      return data.stations.map(station => {
         // Tạo tên trạm từ nhiều nguồn
         let stationName = station.name || station.stationName || '';
         
@@ -232,6 +238,46 @@ export const fetchStations = async () => {
     console.error('❌ Error fetching CEM stations:', error);
     console.log('⚠️ Using mock data fallback');
     return MOCK_STATIONS;
+  }
+};
+
+/**
+ * Fetch chi tiết dữ liệu của một trạm cụ thể
+ * @param {string|number} stationId - ID của trạm cần lấy chi tiết
+ * @returns {Promise<Object>} Chi tiết dữ liệu trạm
+ */
+export const fetchStationDetails = async (stationId) => {
+  try {
+    console.log(`🔄 Fetching details for station ${stationId}...`);
+    const response = await fetchWithTimeout(
+      'https://envisoft.gov.vn/eos/services/call/json/qi_detail',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'Origin': 'https://cem.gov.vn',
+          'Referer': 'https://cem.gov.vn/',
+        },
+        body: new URLSearchParams({
+          station_id: stationId,
+        }),
+      },
+      10000 // 10 second timeout
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`✅ Station details received for ${stationId}`);
+
+    // Return dữ liệu từ response.res
+    return data.res || null;
+  } catch (error) {
+    console.error(`❌ Error fetching station details for ${stationId}:`, error);
+    return null;
   }
 };
 
