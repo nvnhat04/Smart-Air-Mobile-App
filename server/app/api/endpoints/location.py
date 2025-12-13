@@ -264,39 +264,60 @@ async def get_location_stats(
             max_pm25=None,
             min_pm25=None,
             most_visited_location=None,
-            unique_locations=0
+            unique_locations=0,
+            daily_avg_aqi=[]
         )
     
     # Calculate statistics
     total_records = len(locations)
-    
+
     # Date range
     timestamps = [loc["timestamp"] for loc in locations]
     start_date = min(timestamps).strftime("%Y-%m-%d")
     end_date = max(timestamps).strftime("%Y-%m-%d")
-    
+
     # AQI statistics - filter out null and 0 values
     aqi_values = [loc["aqi"] for loc in locations if loc.get("aqi") is not None and loc.get("aqi") > 0]
     avg_aqi = sum(aqi_values) / len(aqi_values) if aqi_values else None
     max_aqi = max(aqi_values) if aqi_values else None
     min_aqi = min(aqi_values) if aqi_values else None
-    
+
     # PM2.5 statistics - filter out null and 0 values
     pm25_values = [loc["pm25"] for loc in locations if loc.get("pm25") is not None and loc.get("pm25") > 0]
     avg_pm25 = sum(pm25_values) / len(pm25_values) if pm25_values else None
     max_pm25 = max(pm25_values) if pm25_values else None
     min_pm25 = min(pm25_values) if pm25_values else None
-    
+   
+
     # Most visited location
     address_counts = {}
     for loc in locations:
         addr = loc.get("address")
         if addr:
             address_counts[addr] = address_counts.get(addr, 0) + 1
-    
+
     most_visited = max(address_counts.items(), key=lambda x: x[1])[0] if address_counts else None
     unique_locations = len(address_counts)
-    
+
+    # Tính daily_avg_aqi: mảng các dict {date, avg_aqi}, chỉ lấy từ ngày -7 đến -1 (không lấy hôm nay)
+    import datetime as dt
+    from collections import defaultdict
+    daily_aqi = defaultdict(list)
+    for loc in locations:
+        if loc.get("aqi") is not None and loc.get("aqi") > 0:
+            date_str = loc["timestamp"].strftime("%Y-%m-%d")
+            daily_aqi[date_str].append(loc["aqi"])
+
+    today = dt.datetime.now(timezone(timedelta(hours=7))).date()
+    # Lấy các ngày từ -7 đến -1 (không lấy hôm nay)
+    valid_dates = [(today - dt.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
+    daily_avg_aqi = [
+        {"date": date, "avg_aqi": round(sum(daily_aqi[date])/len(daily_aqi[date]), 1)}
+        for date in sorted(daily_aqi.keys())
+        if date in valid_dates
+    ]
+
+    length = len(daily_avg_aqi)
     return LocationHistoryStats(
         total_records=total_records,
         date_range={"start": start_date, "end": end_date},
@@ -307,8 +328,90 @@ async def get_location_stats(
         max_pm25=round(max_pm25, 1) if max_pm25 else None,
         min_pm25=round(min_pm25, 1) if min_pm25 else None,
         most_visited_location=most_visited,
-        unique_locations=unique_locations
+        unique_locations=unique_locations,
+        daily_avg_aqi=daily_avg_aqi,
+        length=length
     )
+
+
+@router.get('/stats/day')
+async def get_stats_for_day(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get statistics for a specific calendar day (user's local VN date).
+
+    Date must be in YYYY-MM-DD. Returns simple stats for that day.
+    """
+    db = get_database()
+    user_id = current_user["user_id"]
+
+    # Parse date and compute VN-local start/end then convert to UTC for DB query
+    try:
+        year, month, day = map(int, date.split('-'))
+        vn_tz = timezone(timedelta(hours=7))
+        start_local = datetime(year, month, day, 0, 0, 0, tzinfo=vn_tz)
+        end_local = start_local + timedelta(days=1)
+        # convert to UTC because stored timestamps use UTC
+        start_utc = start_local.astimezone(timezone.utc)
+        end_utc = end_local.astimezone(timezone.utc)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format, expected YYYY-MM-DD")
+
+    cursor = db.locations.find({
+        "user_id": user_id,
+        "timestamp": {"$gte": start_utc, "$lt": end_utc}
+    })
+
+    records = await cursor.to_list(length=10000)
+
+    total = len(records)
+    if total == 0:
+        return {
+            "date": date,
+            "total_records": 0,
+            "avg_aqi": None,
+            "max_aqi": None,
+            "min_aqi": None,
+            "avg_pm25": None,
+            "max_pm25": None,
+            "min_pm25": None,
+            "most_visited_location": None,
+            "unique_locations": 0
+        }
+
+    aqi_values = [r["aqi"] for r in records if r.get("aqi") is not None and r.get("aqi") > 0]
+    avg_aqi = round(sum(aqi_values) / len(aqi_values), 1) if aqi_values else None
+    max_aqi = max(aqi_values) if aqi_values else None
+    min_aqi = min(aqi_values) if aqi_values else None
+
+    pm25_values = [r.get("pm25") for r in records if r.get("pm25") is not None and r.get("pm25") > 0]
+    avg_pm25 = round(sum(pm25_values) / len(pm25_values), 1) if pm25_values else None
+    max_pm25 = max(pm25_values) if pm25_values else None
+    min_pm25 = min(pm25_values) if pm25_values else None
+
+    address_counts = {}
+    for r in records:
+        addr = r.get("address")
+        if addr:
+            address_counts[addr] = address_counts.get(addr, 0) + 1
+
+    most_visited = max(address_counts.items(), key=lambda x: x[1])[0] if address_counts else None
+    unique_locations = len(address_counts)
+
+    return {
+        "date": date,
+        "total_records": total,
+        "avg_aqi": avg_aqi,
+        "max_aqi": max_aqi,
+        "min_aqi": min_aqi,
+        "avg_pm25": avg_pm25,
+        "max_pm25": max_pm25,
+        "min_pm25": min_pm25,
+        "most_visited_location": address_counts,
+        "unique_locations": unique_locations,
+    }
 
 
 @router.delete('/history', status_code=status.HTTP_204_NO_CONTENT)
