@@ -8,6 +8,7 @@ export const getAQIColor = (aqi) => {
   if (aqi <= 100) return '#eab308';
   if (aqi <= 150) return '#f97316';
   if (aqi <= 200) return '#ef4444';
+  if (aqi <= 300) return '#a21caf';
   return '#7f1d1d';
 };
 

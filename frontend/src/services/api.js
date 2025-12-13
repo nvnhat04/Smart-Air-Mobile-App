@@ -51,6 +51,7 @@ const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // VD: 192.168.1.10, 10.0.0
 // const LOCAL_NETWORK_URL = 'http://10.11.239.180:8000'; // VD:
 const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
 
+
 // console.warn(`[api.js] BASE_URL: ${BASE_URL}`);
 // console.warn(`  priority: deploy=${DEPLOY_URL || 'none'} > env=${ENV_BASE || 'none'} > detected=${detectedBackendUrl || 'none'} > config=${CONFIG_BASE || 'none'} > fallback=${DEFAULT_FALLBACK}`);
 
@@ -136,7 +137,7 @@ const api = {
   // GET /location/stats?days=15
   getLocationStats: async (days = 15) => {
     const url = `${BASE_URL}/location/stats?days=${days}`;
-    console.warn(`[api.js] getLocationStats: GET from ${url}`);
+    // console.warn(`[api.js] getLocationStats: GET from ${url}`);
     try {
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       const authStr = await AsyncStorage.getItem('auth');
@@ -157,10 +158,53 @@ const api = {
         throw new Error(`HTTP ${res.status}: ${text}`);
       }
       const data = await res.json();
-      console.warn(`[api.js] getLocationStats: Success`, data);
+      // console.warn(`[api.js] getLocationStats: Success`, data);
       return data;
     } catch (err) {
       console.error(`[api.js] getLocationStats: Error: ${err.message}`);
+      throw err;
+    }
+  },
+
+  // GET /location/stats/day?date=YYYY-MM-DD
+  getLocationStatsForDay: async (date) => {
+    const url = `${BASE_URL}/location/stats/day?date=${encodeURIComponent(date)}`;
+    console.log(`[api.js] getLocationStatsForDay -> GET ${url}`);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) throw new Error('No auth token found. Please login first.');
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) throw new Error('No JWT token found in auth data.');
+
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timeout - server took too long to respond');
+      }
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
+        throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
+      }
       throw err;
     }
   },
@@ -190,7 +234,21 @@ const api = {
 
   // GET /pm25/point?lon=105.8542&lat=21.0285&date=20241206
   getPM25Point: async (lat, lon, date = null) => {
-    const dateParam = date ? `&date=${date.replace(/-/g, '')}` : '';
+    let dateParam = '';
+    if (date) {
+      let dateStr = date;
+      if (date instanceof Date) {
+        // Format to yyyyMMdd
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        dateStr = `${y}${m}${d}`;
+      } else {
+        // Remove all non-digits, fallback
+        dateStr = String(date).replace(/[^\d]/g, '');
+      }
+      dateParam = `&date=${dateStr}`;
+    }
     const url = `${BASE_URL}/pm25/point?lon=${lon}&lat=${lat}${dateParam}`;
     console.warn(`[api.js] getPM25Point: GET from ${url}`);
     
