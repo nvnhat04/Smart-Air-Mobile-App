@@ -440,7 +440,6 @@ export default function DetailStationScreen() {
             <View style={styles.infoColumn}>
             <Text style={styles.statusIcon}>{getAQIIcon(data.aqi || 0)}</Text>
               <View style={styles.statusPill}>
-                
                 <Text style={styles.statusPillText}>{data.status || 'Trung bình'}</Text>
               </View>
               </View>
@@ -625,7 +624,7 @@ export default function DetailStationScreen() {
                           width={w}
                           height={zoneHeight}
                           fill={zone.color}
-                          opacity={0.15}
+                          opacity={0.75}
                         />
                       );
                     });
@@ -1099,8 +1098,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   metricValue: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#111827',
     lineHeight: 26,
   },
