@@ -60,7 +60,15 @@ export default function DetailStationScreen() {
   const navigation = useNavigation();
   const station = route.params?.station;
   const selectedDay = route.params?.selectedDay;
-console.log('🔍 selectedDay in route params:', selectedDay);
+  
+  console.log('🔍 DetailScreen received params:', {
+    stationName: station?.name,
+    temp: station?.temp,
+    humidity: station?.humidity,
+    aqi: station?.aqi,
+    pm25: station?.pm25,
+    selectedDay: selectedDay?.isoDate
+  });
   const [realtimeData, setRealtimeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState(null);
@@ -124,21 +132,40 @@ console.log('🔍 selectedDay in route params:', selectedDay);
           // Nếu là trạm thật (không phải custom point), override day[0] với dữ liệu CEM
           if (isRealStation && weeklyData.length > 0) {
             console.log('🔄 Replacing day[0] with real CEM station data');
-            const temp = station.temp || weeklyData[0].temp;
+            console.log('📊 Station data from params:', {
+              temp: station.temp,
+              humidity: station.humidity,
+              aqi: station.aqi,
+              pm25: station.pm25
+            });
+            console.log('📊 Forecast data (before merge):', {
+              temp: weeklyData[0].temp,
+              humidity: weeklyData[0].humidity,
+              aqi: weeklyData[0].aqi,
+              pm25: weeklyData[0].pm25
+            });
+            
             weeklyData[0] = {
               ...weeklyData[0], // Giữ date, label, dateKey
+              // Ưu tiên AQI và PM2.5 từ CEM (real-time)
               aqi: station.aqi || station.baseAqi || weeklyData[0].aqi,
               pm25: station.pm25 || weeklyData[0].pm25,
-              temp: temp ? Math.round(temp) : temp,
-              humidity: station.humidity || weeklyData[0].humidity,
-              wind_speed: station.windSpeed || weeklyData[0].wind_speed,
-              precipitation: station.precipitation || weeklyData[0].precipitation || 0,
+              // Ưu tiên temp/humidity từ forecast (Open-Meteo reliable hơn)
+              temp: weeklyData[0].temp || station.temp,
+              humidity: weeklyData[0].humidity || station.humidity,
+              wind_speed: weeklyData[0].wind_speed || station.windSpeed,
+              precipitation: weeklyData[0].precipitation || station.precipitation || 0,
               hasData: true, // Station luôn có data
             };
-            console.log('✅ Day[0] updated with CEM data:', {
+            console.log('✅ Day[0] merged data:', {
               aqi: weeklyData[0].aqi,
               pm25: weeklyData[0].pm25,
-              temp: weeklyData[0].temp
+              temp: weeklyData[0].temp,
+              humidity: weeklyData[0].humidity,
+              source: {
+                aqi: station.aqi ? 'CEM' : 'Forecast',
+                temp: weeklyData[0].temp ? 'Forecast' : 'Station'
+              }
             });
           }
 
@@ -164,7 +191,7 @@ console.log('🔍 selectedDay in route params:', selectedDay);
     };
 
     fetchForecastData();
-  }, [station?.lat, station?.lon, station?.aqi, station?.pm25, station?.temp, station?.humidity]);
+  }, [station?.lat, station?.lon]); // Chỉ fetch lại khi vị trí thay đổi
 
   const data = useMemo(() => {
     console.log('🔍 Recalculating data with userGroup:', userGroup);
@@ -201,6 +228,15 @@ console.log('🔍 selectedDay in route params:', selectedDay);
     const pm25Value = latestData?.pm25 || station.pm25 || (currentAqi * 0.6);
     const tempValue = latestData?.temp || station.temp || 28;
     
+    console.log('📊 DetailScreen data merge:', {
+      latestDataTemp: latestData?.temp,
+      stationTemp: station.temp,
+      finalTemp: tempValue,
+      latestDataHumidity: latestData?.humidity,
+      stationHumidity: station.humidity,
+      finalHumidity: latestData?.humidity || station.humidity || 70
+    });
+    
     const result = {
       ...station, // Spread station FIRST
       wind: latestData?.wind_speed?.toFixed(1) || latestData?.windSpeed?.toFixed(1) || station.windSpeed?.toFixed(1) || station.wind || '5.0',
@@ -212,7 +248,13 @@ console.log('🔍 selectedDay in route params:', selectedDay);
       advice: healthAdvice, // Override advice LAST
     };
     
-    console.log('📊 New advice:', healthAdvice?.text?.substring(0, 50) + '...');
+    console.log('📊 DetailScreen final display data:', {
+      temp: result.temp,
+      humidity: result.humidity,
+      aqi: result.aqi,
+      pm25: result.pm25
+    });
+    
     return result;
   }, [station, realtimeData, userGroup, selectedDay]);
 
@@ -350,6 +392,26 @@ console.log('🔍 selectedDay in route params:', selectedDay);
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.backIcon}>{'‹'}</Text>
+        </TouchableOpacity>
+
+        {/* Location Chip - Riêng biệt phía trên */}
+        <View style={styles.locationChipWrapper}>
+          <View style={styles.locationChip}>
+            <Text style={styles.locationText}>
+              {selectedDay?.label} - {selectedDay?.dateStr}
+            </Text>
+            <Text style={styles.locationText}>
+              {data.name || 'Trạm quan trắc'}
+            </Text>
+          </View>
+        </View>
+
         {/* Header gradient */}
         <View
           style={[
@@ -357,26 +419,6 @@ console.log('🔍 selectedDay in route params:', selectedDay);
             { backgroundColor: data.color || '#22c55e' },
           ]}
         >
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.backIcon}>{'‹'}</Text>
-          </TouchableOpacity>
-
-          {/* Location Chip - Riêng biệt phía trên */}
-          <View style={styles.locationChipWrapper}>
-            <View style={styles.locationChip}>
-              <Text style={styles.locationText}>
-                {selectedDay?.label} - {selectedDay?.dateStr}
-              </Text>
-              <Text style={styles.locationText}>
-                {data.name || 'Trạm quan trắc'}
-              </Text>
-            </View>
-          </View>
-
           {/* Header Center - AQI và Info */}
           <View style={styles.headerCenter}>
             {/* Cột trái: Số AQI */}
@@ -541,20 +583,53 @@ console.log('🔍 selectedDay in route params:', selectedDay);
                 }}
               >
                 <Svg width={chartData.width || chartWidth} height={chartData.height || 120}>
-                  <Defs>
-                    {/* Gradient cho background AQI zones - map theo levels */}
-                    <LinearGradient id="aqiGradient" x1="0" y1="0" x2="0" y2="1">
-                      <Stop offset="0%" stopColor="#7c2d12" stopOpacity="0.5" />
-                      <Stop offset="16.67%" stopColor="#a855f7" stopOpacity="0.5" />
-                      <Stop offset="33.33%" stopColor="#ef4444" stopOpacity="0.5" />
-                      <Stop offset="50%" stopColor="#f97316" stopOpacity="0.5" />
-                      <Stop offset="66.67%" stopColor="#eab308" stopOpacity="0.5" />
-                      <Stop offset="100%" stopColor="#22c55e" stopOpacity="0.5" />
-                    </LinearGradient>
-                  </Defs>
-                  
-                  {/* Background gradient AQI zones */}
-                  <Rect x="0" y="0" width={chartData.width || chartWidth} height={chartData.height || 120} fill="url(#aqiGradient)" />
+                  {/* Vẽ các zones màu AQI dựa trên trục Y */}
+                  {(() => {
+                    const h = chartData.height || 120;
+                    const w = chartData.width || chartWidth;
+                    const yMin = chartData.yMin || 0;
+                    const yMax = chartData.yMax || 300;
+                    const yRange = yMax - yMin || 1;
+                    
+                    // AQI zones theo chuẩn EPA
+                    const aqiZones = [
+                      { min: 0, max: 50, color: '#22c55e' },     // Xanh lá - Tốt
+                      { min: 50, max: 100, color: '#eab308' },   // Vàng - Trung bình
+                      { min: 100, max: 150, color: '#f97316' },  // Cam - Kém
+                      { min: 150, max: 200, color: '#ef4444' },  // Đỏ - Xấu
+                      { min: 200, max: 300, color: '#a855f7' },  // Tím - Rất xấu
+                      { min: 300, max: 500, color: '#7c2d12' },  // Nâu đỏ - Nguy hại
+                    ];
+                    
+                    return aqiZones.map((zone, idx) => {
+                      // Chỉ vẽ zone nếu nó nằm trong range hiển thị
+                      if (zone.max < yMin || zone.min > yMax) return null;
+                      
+                      // Tính vị trí y cho zone
+                      const zoneMin = Math.max(zone.min, yMin);
+                      const zoneMax = Math.min(zone.max, yMax);
+                      
+                      // Convert AQI value sang pixel position (y = 0 ở top, y = h ở bottom)
+                      // yMin ở bottom (y = h), yMax ở top (y = 0)
+                      const y1 = h - ((zoneMax - yMin) / yRange) * h; // Top của zone
+                      const y2 = h - ((zoneMin - yMin) / yRange) * h; // Bottom của zone
+                      const zoneHeight = y2 - y1;
+                      
+                      if (zoneHeight <= 0) return null;
+                      
+                      return (
+                        <Rect
+                          key={idx}
+                          x="0"
+                          y={y1}
+                          width={w}
+                          height={zoneHeight}
+                          fill={zone.color}
+                          opacity={0.15}
+                        />
+                      );
+                    });
+                  })()}
                   
                   {/* Gridlines ngang */}
                   {chartData.yAxisLabels && chartData.yAxisLabels.map((label, idx) => {
@@ -795,27 +870,31 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 56 : 40,
-    paddingBottom: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
     paddingHorizontal: 16,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
+    borderBottomLeftRadius: 50,
+    borderBottomRightRadius: 50,
+    borderTopLeftRadius: 50,
+    borderTopRightRadius: 50,
   },
   backButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 52 : 36,
-    left: 14,
+    top: Platform.OS === 'ios' ? 54 : 40,
+    left: 16,
     width: 40,
     height: 40,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   backIcon: {
-    color: '#ffffff',
+    color: 'rgba(0, 0, 0, 0.62)',
     fontSize: 40,
-    marginTop: 0,
+    marginTop: -2,
+    fontWeight: '300',
   },
   headerTopRight: {
     position: 'absolute',
@@ -845,15 +924,15 @@ const styles = StyleSheet.create({
   locationChipWrapper: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingTop: Platform.OS === 'ios' ? 60 : 48,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   headerCenter: {
-    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
+    gap: 16,
   },
   aqiColumn: {
     alignItems: 'center',
@@ -875,13 +954,14 @@ const styles = StyleSheet.create({
   locationChip: {
     flexDirection: 'column',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgb(255, 255, 255)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-    gap: 2,
+    borderColor: '#e5e7eb',
+    gap: 4,
+    width: '50%',
   },
   locationDot: {
     fontSize: 10,
@@ -890,7 +970,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 13,
-    color: '#ffffff',
+    color: 'rgb(0, 0, 0)',
     fontWeight: '600',
     textAlign: 'center',
   },
