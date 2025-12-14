@@ -735,7 +735,7 @@ export default function MapScreen() {
   };
 
   // Handle map click to fetch data from APIs
-  const handleMapClick = async (lat, lon) => {
+  const handleMapClick = async (lat, lon, pointId = 'custom-point') => {
     try {
       // Validate coordinates before making API calls
       const validLat = parseFloat(lat);
@@ -755,8 +755,10 @@ export default function MapScreen() {
       
       setLoadingPointData(true);
       
-      // Lưu tọa độ để có thể re-fetch khi đổi ngày
-      setLastClickedPoint({ lat: validLat, lon: validLon });
+      // Lưu tọa độ để có thể re-fetch khi đổi ngày (chỉ cho custom-point)
+      if (pointId === 'custom-point') {
+        setLastClickedPoint({ lat: validLat, lon: validLon });
+      }
       
       // Use Promise.allSettled instead of Promise.all to handle individual failures gracefully
       const results = await Promise.allSettled([
@@ -782,7 +784,8 @@ export default function MapScreen() {
         temp: weatherData.temp,
         humidity: weatherData.humidity,
         precipitation: weatherData.precipitation,
-        selectedDate: selectedDay?.isoDate || 'today'
+        selectedDate: selectedDay?.isoDate || 'today',
+        pointId: pointId
       });
       
       // Log any failures for debugging
@@ -806,7 +809,7 @@ export default function MapScreen() {
 
       // Construct station-like object (KHÔNG lưu vị trí này vào location history)
       const pointData = {
-        id: 'custom-point', // ID khác 'user-gps-location' nên KHÔNG được lưu
+        id: pointId, // Sử dụng pointId được truyền vào (mặc định 'custom-point')
         lat: validLat,
         lon: validLon, // Đổi từ lng sang lon để consistent với DetailStationScreen
         lng: validLon, // Giữ lng để backward compatible
@@ -892,11 +895,14 @@ export default function MapScreen() {
   }, [selectedStation, stationDetailsById]);
 
 
-  // Re-fetch PM2.5 data khi đổi ngày (nếu đang xem điểm tùy ý)
+  // Re-fetch PM2.5 data khi đổi ngày (nếu đang xem điểm tùy ý hoặc vị trí GPS)
   useEffect(() => {
     if (selectedStation?.id === 'custom-point' && lastClickedPoint) {
-      // Re-fetch dữ liệu với ngày mới
-      handleMapClick(lastClickedPoint.lat, lastClickedPoint.lon);
+      // Re-fetch dữ liệu với ngày mới cho điểm tùy ý
+      handleMapClick(lastClickedPoint.lat, lastClickedPoint.lon, 'custom-point');
+    } else if (selectedStation?.id === 'user-gps-location' && selectedStation?.lat && selectedStation?.lon) {
+      // Re-fetch dữ liệu với ngày mới cho vị trí GPS (giữ nguyên id)
+      handleMapClick(selectedStation.lat, selectedStation.lon, 'user-gps-location');
     }
   }, [selectedDay]); // Đảm bảo dependencies đầy đủ
 
