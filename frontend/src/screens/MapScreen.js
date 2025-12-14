@@ -462,6 +462,8 @@ export default function MapScreen() {
 
   // Load dữ liệu trạm thật từ CEM API khi component mount
   useEffect(() => {
+    console.log('🚀 MapScreen mounted - Starting to load stations...');
+    
     const loadStations = async () => {
       try {
         setLoadingStations(true);
@@ -470,30 +472,42 @@ export default function MapScreen() {
         console.log(`✅ Loaded ${stations.length} stations from CEM`);
         
         // Debug: Log chi tiết stations
-        // if (stations.length > 0) {
-        //   console.log('📊 First station sample:', {
-        //     id: stations[0].id,
-        //     name: stations[0].name,
-        //     lat: stations[0].lat,
-        //     lng: stations[0].lng,
-        //     aqi: stations[0].aqi,
-        //     baseAqi: stations[0].baseAqi,
-        //   });
-        // }
+        if (stations.length > 0) {
+          console.log('📊 First station sample:', {
+            id: stations[0].id,
+            name: stations[0].name,
+            lat: stations[0].lat,
+            lng: stations[0].lng,
+            aqi: stations[0].aqi,
+            baseAqi: stations[0].baseAqi,
+            pm25: stations[0].pm25,
+          });
+        } else {
+          console.log('⚠️ No stations returned from API');
+        }
         
+        console.log('✅ setCemStations called with', stations.length, 'stations');
         setCemStations(stations);
+        
+        // Force log để kiểm tra
+        setTimeout(() => {
+          console.log('🔍 After setCemStations - state should be updated');
+        }, 100);
       } catch (error) {
         console.error('❌ Error loading CEM stations:', error);
+        console.error('❌ Error stack:', error.stack);
         Alert.alert(
           'Lỗi tải dữ liệu',
           'Không thể tải dữ liệu trạm từ CEM. Vui lòng thử lại sau.',
           [{ text: 'OK' }]
         );
       } finally {
+        console.log('🏁 loadStations finally block - setLoadingStations(false)');
         setLoadingStations(false);
       }
     };
 
+    console.log('📞 Calling loadStations()...');
     loadStations();
   }, []); // Chỉ chạy một lần khi mount
 
@@ -553,27 +567,85 @@ export default function MapScreen() {
   // If date is provided, use forecast API; otherwise use current API
   const fetchWeatherData = async (lat, lon, date = null) => {
     try {
-      let url;
-      let formattedDate = null;
+      console.log('🌤️ fetchWeatherData called with:', { lat, lon, date });
       
-      if (date) {
-        // Use forecast API with specific date (format: YYYY-MM-DD)
-        formattedDate = date.split('T')[0]; // Extract date part from ISO string
-        url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation&start_date=${formattedDate}&end_date=${formattedDate}&timezone=auto`;
-      } else {
-        // Use current weather API for today
-        url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation&timezone=auto`;
+      // Sử dụng backend endpoint để lấy forecast (giống DetailScreen)
+      // Điều này đảm bảo data NHẤT QUÁN giữa popup và detail screen
+      const formattedDate = date ? date.split('T')[0] : null;
+      
+      console.log('🔍 formattedDate after split:', formattedDate);
+      
+      // LUÔN LUÔN fetch từ backend (cả khi date = null, lấy hôm nay)
+      console.log('🔄 Fetching weather from BACKEND:', formattedDate || 'today');
+      const backendUrl = `${BASE_URL}/pm25/forecast?lat=${lat}&lon=${lon}&days=7`;
+      
+      try {
+        const response = await fetch(backendUrl, {
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          console.log('📦 Backend forecast received:', {
+            forecastLength: data.forecast?.length,
+            requestedDate: formattedDate || 'today (first day)'
+          });
+          
+          // Tìm ngày được chọn trong forecast (hoặc lấy ngày đầu tiên nếu không có date)
+          const targetDate = formattedDate || data.forecast?.[0]?.dateKey;
+          const dayData = data.forecast?.find(d => d.dateKey === targetDate);
+          
+          console.log('🔍 Searching for date in forecast:', {
+            targetDate,
+            found: !!dayData,
+            availableDates: data.forecast?.map(f => f.dateKey)
+          });
+          
+          if (dayData) {
+            console.log('✅ Using backend forecast data:', {
+              temp: dayData.temp,
+              temp_max: dayData.temp_max,
+              temp_min: dayData.temp_min,
+              humidity: dayData.humidity,
+              precipitation: dayData.rain_sum
+            });
+            
+            return {
+              temp: dayData.temp || Math.round((dayData.temp_max + dayData.temp_min) / 2),
+              humidity: dayData.humidity || 0,
+              windSpeed: dayData.wind_speed || 0,
+              weatherCode: 0,
+              precipitation: dayData.rain_sum || 0,
+            };
+          } else {
+            console.warn('⚠️ Date not found in backend forecast, falling back to Open-Meteo');
+          }
+        } else {
+          console.warn('⚠️ Backend response not OK:', response.status);
+        }
+      } catch (backendError) {
+        console.warn('⚠️ Backend forecast failed, using Open-Meteo directly:', backendError.message);
       }
       
-      console.log('Fetching weather from:', url);
+      // Fallback: Gọi Open-Meteo trực tiếp (khi backend fail)
+      console.warn('📢 FALLBACK: Using Open-Meteo direct (this causes inconsistency!)');
+      let url;
+      if (formattedDate) {
+        url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation&start_date=${formattedDate}&end_date=${formattedDate}&timezone=auto`;
+      } else {
+        url = `${OPENMETEO_API_URL}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation&timezone=auto`;
+      }
+
+      console.log('Fetching weather from Open-Meteo directly:', url);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
-      if (date && data.hourly) {
+
+      if (formattedDate && data.hourly) {
         // For forecast data, get average of the day (or middle of day around noon)
         const hourly = data.hourly;
         const midIndex = Math.floor(hourly.time.length / 2); // Get noon data
@@ -703,6 +775,16 @@ export default function MapScreen() {
         city: '' 
       };
       
+      // Debug: Log fetched data
+      console.log('📊 handleMapClick - Fetched data:', {
+        pm25: pm25Data?.pm25,
+        aqi: pm25Data?.aqi,
+        temp: weatherData.temp,
+        humidity: weatherData.humidity,
+        precipitation: weatherData.precipitation,
+        selectedDate: selectedDay?.isoDate || 'today'
+      });
+      
       // Log any failures for debugging
       const apiNames = ['fetchPM25Data', 'fetchWeatherData', 'reverseGeocode'];
       results.forEach((result, index) => {
@@ -744,6 +826,13 @@ export default function MapScreen() {
         advice: getHealthAdvice(pm25Data?.aqi),
         category: pm25Data?.category || null,
       };
+
+      console.log('📍 pointData created for popup:', {
+        name: pointData.name,
+        temp: pointData.temp,
+        humidity: pointData.humidity,
+        aqi: pointData.aqi
+      });
 
       setSelectedStation(pointData);
     } catch (error) {
@@ -1021,6 +1110,12 @@ export default function MapScreen() {
 
   // Inject stations vào WebView sau khi cemStations được load và WebView ready
   useEffect(() => {
+    console.log('🔍 Inject stations check:', {
+      webviewReady,
+      hasWebviewRef: !!webviewRef.current,
+      cemStationsLength: cemStations.length
+    });
+    
     if (webviewReady && webviewRef.current && cemStations.length > 0) {
       console.log(`🗺️ Injecting ${cemStations.length} stations into map...`);
       
