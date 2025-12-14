@@ -32,6 +32,8 @@ export default function AnalyticExposureScreen() {
   const [escapeDestinations, setEscapeDestinations] = useState([]); // Destinations with real AQI
   const [loadingDestinations, setLoadingDestinations] = useState(false);
   const [destinationsLoaded, setDestinationsLoaded] = useState(false); // Track if already loaded
+  const [escapeForecastDays, setEscapeForecastDays] = useState(3); // days to request for escape forecasts (max 7)
+  const [showEscapeDaysMenu, setShowEscapeDaysMenu] = useState(false);
   const [overviewLoaded, setOverviewLoaded] = useState(false); // Track overview tab loaded
   const [historyLoaded, setHistoryLoaded] = useState(false); // Track history tab loaded
   const [dayStats, setDayStats] = useState(null); // stats for a selected specific day
@@ -260,72 +262,72 @@ export default function AnalyticExposureScreen() {
         id: 2, 
         name: 'Công viên Yên Sở', 
         recommendation: 'Hồ rộng, chạy bộ, picnic gia đình, không gian xanh',
-        lat: 20.9995,
-        lon: 105.8673,
+        lat: 20.9642,
+        lon: 105.8546,
         img_url: 'https://mia.vn/media/uploads/blog-du-lich/trai-nghiem-thu-vi-cam-trai-tai-cong-vien-yen-so-3-1639940800.jpeg'
       },
       { 
         id: 3, 
         name: 'Làng cổ Đường Lâm', 
         recommendation: 'Làng cổ 1200 năm, nhà truyền thống, ẩm thực đặc sản',
-        lat: 21.1594,
-        lon: 105.4600,
+        lat: 21.1570,
+        lon: 105.4725,
         img_url: 'https://cdn.vntrip.vn/cam-nang/wp-content/uploads/2017/11/lang-co-duong-lam-6-e1509792323651.jpg'
       },
       { 
         id: 4, 
         name: 'Khu du lịch Sơn Tây', 
         recommendation: 'Thành cổ Sơn Tây, núi non hùng vĩ, không khí trong lành',
-        lat: 21.1498,
-        lon: 105.5192,
+        lat: 21.1350,
+        lon: 105.5053,
         img_url: 'https://cdn.justfly.vn/700x464/media/202106/30/1625050495-thanh-co-son-tay-3.jpg'
       },
       { 
         id: 5, 
         name: 'Vườn Vua Resort', 
         recommendation: 'Resort sinh thái, vườn cây ăn trái, trải nghiệm làm vườn',
-        lat: 21.1300,
-        lon: 105.3300,
+        lat: 21.1051,
+        lon: 105.2952,
         img_url: 'https://chungcudep.net/wp-content/uploads/2019/06/nha-hang-sen-du-an-vuon-vua-resort-phu-tho.jpg'
       },
       { 
         id: 6, 
         name: 'Vườn quốc gia Ba Vì, Hà Nội', 
         recommendation: 'Vườn quốc gia, suối nước nóng, cắm trại rừng thông',
-        lat: 21.1400,
-        lon: 105.2900,
+        lat: 21.0805,
+        lon: 105.3592,
         img_url: 'https://reviewvilla.vn/wp-content/uploads/2022/06/vuon-quoc-gia-ba-vi-14.jpg'
       },
       { 
         id: 7, 
         name: 'Chùa Hương, Mỹ Đức', 
         recommendation: 'Di tích lịch sử, chèo thuyền suối Yến, núi non hữu tình',
-        lat: 20.6400,
-        lon: 105.5700,
+        lat: 20.6139,
+        lon: 105.7711,
         img_url: 'https://lh5.googleusercontent.com/M_3FhIKKa4tPnG3d4leZAgdpKmiUOr2gdaz_itT4Yj8g0DJOinb_hCsozYg8NfWBBkwsywYYIqaWgjj_EptAZTQvb8OhCgzPPQK5uqelN0TZX0GJW0h3eXZ24uBWfA8TSYBUwWdp71DiDHw36WPgq-U'
       },
       { 
         id: 8, 
         name: 'Đại Lải, Phú Thọ', 
         recommendation: 'Hồ Đại Lải xanh mát, resort nghỉ dưỡng, thể thao nước',
-        lat: 21.3500,
-        lon: 105.5860,
+        lat: 21.3289,
+        lon: 105.7274,
         img_url: 'https://cdn.tgdd.vn/Files/2021/07/05/1365854/nhung-kinh-nghiem-kham-pha-ho-dai-lai-vinh-phuc-202202141456396264.jpg'
       },
       { 
         id: 9, 
         name: 'Tam Đảo, Phú Thọ', 
         recommendation: 'Săn mây, check-in Thác Bạc, khí hậu mát mẻ quanh năm',
-        lat: 21.3000,
-        lon: 105.5500,
+        lat: 21.4546,
+        lon: 105.6414,
         img_url: 'https://media.thuonghieuvaphapluat.vn/upload/2021/11/18/tam-dao-vinh-phuc-thac-mac-gia-trong-xe-qua-cao-bao-ve-xo-xat-voi-khach-du-lichfb2.jpg'
       },
       { 
         id: 10, 
         name: 'Thung Nham, Ninh Bình', 
         recommendation: 'Hang động, vườn chim, kayaking, cảnh quan tuyệt đẹp',
-        lat: 20.2215,
-        lon: 105.8600,
+        lat: 20.2192,
+        lon: 105.8910,
         img_url: 'https://35chill.vn/wp-content/uploads/2021/07/camnhi-202922032904-Vuon-chim-Thung-Nham-Ninh-Binh-2-1.jpg'
       },
     ],
@@ -355,28 +357,31 @@ export default function AnalyticExposureScreen() {
               const driveTime = calculateDriveTime(distance);
 
               // Use forecast API only (includes current data in response)
-              const forecastData = await api.getPM25Forecast(dest.lat, dest.lon, 3);
-              console.log(`[AnalyticExposureScreen] Loaded forecast for ${dest.name}:`, forecastData.forecast[2]);
+              const daysToFetch = Math.min(Math.max(1, escapeForecastDays), 7);
+              const forecastData = await api.getPM25Forecast(dest.lat, dest.lon, daysToFetch);
+              console.log(`[AnalyticExposureScreen] Loaded forecast for ${dest.name}: requested ${daysToFetch} days, got ${forecastData?.forecast?.length || 0}`);
               
-              // Get forecast for 48 hours from now
+              // Get forecast for the configured future window (escapeForecastDays days)
               const now = new Date();
-              const target48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-              const targetDateStr = target48h.toISOString().split('T')[0];
+              const targetFuture = new Date(now.getTime() + (Math.max(1, Math.min(escapeForecastDays, 7)) * 24 * 60 * 60 * 1000));
+              const targetDateStr = targetFuture.toISOString().split('T')[0];
               
               // Get current data (first item in forecast)
-              const currentForecast = forecastData?.forecast?.[2];
+              // Use the last item in the returned forecast array as the 'current' summary index
+              const idxForSummary = Math.min(Math.max(0, daysToFetch - 1), (forecastData?.forecast?.length || 1) - 1);
+              const currentForecast = forecastData?.forecast?.[idxForSummary];
               const currentAqi = currentForecast?.aqi || 0;
               
-              // Find the forecast for 48h
-              const forecastFor48h = forecastData?.forecast?.find(f => f.date === targetDateStr);
+              // Find the forecast for the selected future window
+              const forecastForTarget = forecastData?.forecast?.find(f => f.date === targetDateStr);
               
               let aqi48h = currentAqi;
               let pm25_48h = currentForecast?.pm25 || 0;
               let hasForecast = false;
               
-              if (forecastFor48h && forecastFor48h.aqi > 0) {
-                aqi48h = forecastFor48h.aqi;
-                pm25_48h = forecastFor48h.pm25;
+              if (forecastForTarget && forecastForTarget.aqi > 0) {
+                aqi48h = forecastForTarget.aqi;
+                pm25_48h = forecastForTarget.pm25;
                 hasForecast = true;
               }
               
@@ -430,7 +435,7 @@ export default function AnalyticExposureScreen() {
     };
 
     loadDestinationsAQI();
-  }, [activeTab, userLocation, baseDestinations, destinationsLoaded]);
+  }, [activeTab, userLocation, baseDestinations, destinationsLoaded, escapeForecastDays]);
 
 
   const filteredDestinations = useMemo(
@@ -1112,7 +1117,7 @@ export default function AnalyticExposureScreen() {
         <View style={styles.weekendHeaderRow}>
           <View style={styles.weekendHeaderText}>
             <Text style={styles.weekendTitle}>Trốn bụi 🚆</Text>
-            <Text style={styles.weekendSubtitle}>Dựa trên dự báo 48h tới</Text>
+            {/* <Text style={styles.weekendSubtitle}>Dựa trên dự báo {escapeForecastDays === 1 ? '24h' : `${escapeForecastDays} ngày`} tới</Text> */}
           </View>
           <View style={styles.weekendRadiusContainer}>
             <TouchableOpacity
@@ -1149,6 +1154,40 @@ export default function AnalyticExposureScreen() {
                       ]}
                     >
                       {r} km
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <View style={{ width: 8 , height: 8 }}></View>
+            {/* Forecast days selector (1..7) */}
+            <TouchableOpacity
+              style={[styles.weekendRadiusButton, { marginLeft: 8 }]}
+              onPress={() => setShowEscapeDaysMenu((v) => !v)}
+              activeOpacity={0.8}
+            >
+              <Feather name="clock" size={12} color="#1d4ed8" />
+              <Text style={styles.weekendRadiusButtonText}>{escapeForecastDays === 1 ? '24h' : `${escapeForecastDays} ngày`}</Text>
+              <Feather
+                name={showEscapeDaysMenu ? 'chevron-up' : 'chevron-down'}
+                size={12}
+                color="#6b7280"
+              />
+            </TouchableOpacity>
+            {showEscapeDaysMenu && (
+              <View style={[styles.weekendRadiusMenu, { right: 0, left: undefined, marginLeft: 0, marginTop: 8 }]}> 
+                {Array.from({ length: 7 }, (_, i) => i + 1).map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    style={[styles.weekendRadiusMenuItem, escapeForecastDays === d && styles.weekendRadiusMenuItemActive]}
+                    onPress={() => {
+                      setEscapeForecastDays(d);
+                      setShowEscapeDaysMenu(false);
+                      setDestinationsLoaded(false); // force reload with new window
+                    }}
+                  >
+                    <Text style={[styles.weekendRadiusMenuText, escapeForecastDays === d && styles.weekendRadiusMenuTextActive]}>
+                      {d === 1 ? '24h' : `${d} ngày`}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1246,7 +1285,7 @@ export default function AnalyticExposureScreen() {
                               styles.forecastBadgeText,
                               aqiChange < 0 ? styles.forecastBadgeTextGood : styles.forecastBadgeTextBad
                             ]}>
-                              {aqiChange < 0 ? '↓' : '↑'} {Math.abs(aqiChangePercent)}% sau 48h
+                              {aqiChange < 0 ? '↓' : '↑'} {Math.abs(aqiChangePercent)}% sau {escapeForecastDays === 1 ? '24h' : `${escapeForecastDays} ngày`}
                             </Text>
                           </View>
                         )}
@@ -1578,14 +1617,14 @@ export default function AnalyticExposureScreen() {
                       </View>
                     )}
                     
-                    {item.latitude && item.longitude && (
+                    {/* {item.latitude && item.longitude && (
                       <View style={styles.historyCardRow}>
                         <Feather name="navigation" size={14} color="#64748b" />
                         <Text style={styles.historyCardMeta}>
                           {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
                         </Text>
                       </View>
-                    )}
+                    )} */}
                   </View>
                 </View>
               );
@@ -2395,7 +2434,7 @@ const styles = StyleSheet.create({
   },
   weekendRadiusMenu: {
     position: 'absolute',
-    top: 34,
+    top: 60,
     right: 0,
     backgroundColor: '#ffffff',
     borderRadius: 10,
@@ -2409,6 +2448,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
     zIndex: 20,
+   
   },
   weekendRadiusMenuItem: {
     paddingHorizontal: 10,

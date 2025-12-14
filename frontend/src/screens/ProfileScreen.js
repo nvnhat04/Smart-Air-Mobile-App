@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -17,6 +18,7 @@ export default function ProfileScreen() {
     phone: '',
     city: '',
     country: '',
+    group: '',
   });
   const [saving, setSaving] = useState(false);
   const navigation = useNavigation();
@@ -40,6 +42,7 @@ export default function ProfileScreen() {
             if (res.ok) {
               const json = await res.json();
               setProfile(json.profile || null);
+              console.log('[ProfileScreen] profile loaded from server', json);
             } else {
               console.warn('[ProfileScreen] profile fetch failed', res.status);
             }
@@ -92,6 +95,7 @@ export default function ProfileScreen() {
       phone: profile?.phone || '',
       city: profile?.city || '',
       country: profile?.country || '',
+      group: profile?.group || 'normal',
     });
     setShowEditModal(true);
   };
@@ -114,6 +118,7 @@ export default function ProfileScreen() {
         phone: editForm.phone.trim() || null,
         city: editForm.city.trim() || null,
         country: editForm.country.trim() || null,
+        group: editForm.group || null,
       };
 
       // Get JWT token
@@ -257,6 +262,13 @@ export default function ProfileScreen() {
               )}
               {profile.country && (
                 <ProfileRow icon="globe" label="Quốc gia" value={profile.country} />
+              )}
+              {profile.group && (
+                <ProfileRow
+                  icon="shield"
+                  label="Nhóm người"
+                  value={profile.group === 'sensitive' ? 'Nhạy cảm' : 'Bình thường'}
+                />
               )}
             </View>
           </View>
@@ -421,6 +433,20 @@ export default function ProfileScreen() {
                   onChangeText={(text) => setEditForm({...editForm, country: text})}
                   placeholderTextColor="#94a3b8"
                 />
+              </View>
+
+              {/* Group */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Nhóm người</Text>
+                <View style={{ borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                  <Picker
+                    selectedValue={editForm.group}
+                    onValueChange={(val) => setEditForm({...editForm, group: val})}
+                  >
+                    <Picker.Item label="Bình thường" value="normal" />
+                    <Picker.Item label="Nhạy cảm" value="sensitive" />
+                  </Picker>
+                </View>
               </View>
             </ScrollView>
 

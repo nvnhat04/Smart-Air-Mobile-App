@@ -17,6 +17,7 @@ export default function RegisterScreen() {
   const [location, setLocation] = useState('');
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('');
+  const [group, setGroup] = useState('normal');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigation = useNavigation();
@@ -55,7 +56,8 @@ export default function RegisterScreen() {
         phone: phone || undefined,
         location: location || undefined,
         city: city || undefined,
-        country: country || undefined
+        country: country || undefined,
+        group: group || undefined
       };
 
       // Remove undefined fields
@@ -195,6 +197,20 @@ export default function RegisterScreen() {
               <Picker.Item label="Nam" value="male" />
               <Picker.Item label="Nữ" value="female" />
               <Picker.Item label="Khác" value="other" />
+            </Picker>
+          </View>
+
+          <View style={[styles.inputContainer, styles.pickerContainer]}>
+            <Feather name="shield" size={20} color="#64748b" style={styles.inputIcon} />
+            <Picker
+              selectedValue={group}
+              onValueChange={setGroup}
+              enabled={!loading}
+              style={styles.picker}
+            >
+              <Picker.Item label="Nhóm người (Tùy chọn)" value="" />
+              <Picker.Item label="Bình thường" value="normal" />
+              <Picker.Item label="Nhạy cảm" value="sensitive" />
             </Picker>
           </View>
 
