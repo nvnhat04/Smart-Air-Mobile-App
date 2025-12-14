@@ -69,11 +69,23 @@ async def register(payload: UserCreate):
         )
     
     # Create user document
+    profile_dict = payload.profile.dict() if payload.profile else {}
+    # Ensure enum values (if any) are converted to raw values for storage
+    try:
+        if 'group' in profile_dict:
+            val = profile_dict.get('group')
+            profile_dict['group'] = getattr(val, 'value', val)
+    except Exception:
+        pass
+    # Always ensure a default group is present
+    if not profile_dict.get('group'):
+        profile_dict['group'] = 'normal'
+
     user_dict = {
         "email": payload.email,
         "username": payload.username,
         "hashed_password": get_password_hash(payload.password),
-        "profile": payload.profile.dict() if payload.profile else {},
+        "profile": profile_dict,
         "role": payload.role or "user",
         "is_active": True,
         "created_at": datetime.utcnow(),
@@ -279,14 +291,23 @@ async def update_profile(
     db = get_database()
     
     # Update profile fields
+    profile_update = payload.profile.dict(exclude_none=True)
+    if 'group' in profile_update:
+        profile_update['group'] = getattr(profile_update['group'], 'value', profile_update['group'])
+
     update_data = {
-        "profile": payload.profile.dict(exclude_none=True),
+        "profile": profile_update,
         "updated_at": datetime.utcnow()
     }
     
+    # Merge profile fields instead of replacing whole profile to avoid removing existing keys
+    set_ops = {"updated_at": datetime.utcnow()}
+    for k, v in profile_update.items():
+        set_ops[f"profile.{k}"] = v
+
     result = await db.users.find_one_and_update(
         {"email": current_user["email"]},
-        {"$set": update_data},
+        {"$set": set_ops},
         return_document=True
     )
     
@@ -328,15 +349,24 @@ async def update_profile_by_id(
         )
     
     # Update profile fields
+    profile_update = payload.profile.dict(exclude_none=True)
+    if 'group' in profile_update:
+        profile_update['group'] = getattr(profile_update['group'], 'value', profile_update['group'])
+
     update_data = {
-        "profile": payload.profile.dict(exclude_none=True),
+        "profile": profile_update,
         "updated_at": datetime.utcnow()
     }
     
     try:
+        # Merge profile fields instead of replacing whole profile
+        set_ops = {"updated_at": datetime.utcnow()}
+        for k, v in profile_update.items():
+            set_ops[f"profile.{k}"] = v
+
         result = await db.users.find_one_and_update(
             {"_id": ObjectId(user_id)},
-            {"$set": update_data},
+            {"$set": set_ops},
             return_document=True
         )
     except Exception:
