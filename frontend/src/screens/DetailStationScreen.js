@@ -5,7 +5,12 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { UserGroupSelector } from '../components/ui';
 import { BASE_URL } from '../services/api';
 import { getHealthAdvice } from '../utils/mapUtils';
-
+import GoodIcon from '../components/icon/good';
+import YellowIcon from '../components/icon/yellow';
+import OrangeIcon from '../components/icon/orange';
+import RedIcon from '../components/icon/red';
+import PurpleIcon from '../components/icon/purple';
+import MaroonIcon from '../components/icon/maroon';
 function generateWeeklyData(baseColor) {
   const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
   const today = new Date();
@@ -47,12 +52,12 @@ function getAQIColor(score) {
 }
 
 function getAQIIcon(score) {
-  if (score <= 50) return '😊'; // Tốt - Mặt cười
-  if (score <= 100) return '😐'; // Trung bình - Bình thường
-  if (score <= 150) return '😷'; // Kém - Đeo khẩu trang
-  if (score <= 200) return '😨'; // Xấu - Lo lắng
-  if (score <= 300) return '😱'; // Rất xấu - Kinh hãi
-  return '☠️'; // Nguy hại - Nguy hiểm
+  if (score <= 50) return <GoodIcon width={90} height={90} />; // Tốt - Mặt cười
+  if (score <= 100) return <YellowIcon width={90} height={90} />; // Trung bình - Bình thường
+  if (score <= 150) return <OrangeIcon width={90} height={90} />; // Kém - Đeo khẩu trang
+  if (score <= 200) return <RedIcon width={90} height={90} />; // Xấu - Lo lắng
+  if (score <= 300) return <PurpleIcon width={90} height={90} />; // Rất xấu - Kinh hãi
+  return <MaroonIcon width={90} height={90} />; // Nguy hại - Nguy hiểm
 }
 
 export default function DetailStationScreen() {
@@ -438,7 +443,10 @@ export default function DetailStationScreen() {
 
             {/* Cột phải: Thông tin chi tiết */}
             <View style={styles.infoColumn}>
-            <Text style={styles.statusIcon}>{getAQIIcon(data.aqi || 0)}</Text>
+            {/* <Text style={styles.statusIcon}>{getAQIIcon(data.aqi || 0)}</Text> */}
+            <View style={styles.statusIcon}>
+                {getAQIIcon(data.aqi || 0)}
+            </View>
               <View style={styles.statusPill}>
                 <Text style={styles.statusPillText}>{data.status || 'Trung bình'}</Text>
               </View>
