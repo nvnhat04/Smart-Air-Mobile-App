@@ -111,7 +111,7 @@ export default function AnalyticExposureScreen() {
         const processed = await processHistory(historyData, false, userLocation);
         setAnalyticsData(processed);
         // console.log('[AnalyticExposureScreen] Processed analytics data:', processed.length, 'days');
-        console.log('[AnalyticExposureScreen] Sample data:', processed.slice(0, 3));
+        // console.log('[AnalyticExposureScreen] Sample data:', processed.slice(0, 3));
       }
       setOverviewLoaded(true);
     } catch (error) {
@@ -531,7 +531,7 @@ export default function AnalyticExposureScreen() {
   const pastPm25Avg = locationStats
     ? (locationStats.avg_pm25 * exposureMultiplier).toFixed(1)
     : aqiToPm25(pastAvg).toFixed(1);
-  console.log("Length data ",locationStats);
+  // console.log("Length data ",locationStats);
   const futurePm25Avg = aqiToPm25(futureAvg).toFixed(1);
   const cigPast = locationStats ? (pastPm25Avg * (locationStats.length == 0 ? 1 : locationStats.length) / 22).toFixed(1) : '0.0';
   const cigFuture = locationStats ? (futurePm25Avg * 7 / 22).toFixed(1) : '0.0';
@@ -1030,7 +1030,7 @@ export default function AnalyticExposureScreen() {
                 {pastPm25Avg}
                 <Text style={styles.exposurePm25Unit}> µg/m³</Text>
               </Text>
-              <Text style={styles.exposureText}>Tổng phơi nhiễm PM2.5 tuần trước</Text>
+              <Text style={styles.exposureText}>Tổng phơi nhiễm tuần trước</Text>
               <Text style={styles.exposureCig}>
                 ≈ hút <Text style={styles.exposureCigValue}>{cigPast}</Text> điếu thuốc
               </Text>
@@ -1061,7 +1061,7 @@ export default function AnalyticExposureScreen() {
                 {futurePm25Avg}
                 <Text style={styles.exposurePm25Unit}> µg/m³</Text>
               </Text>
-              <Text style={styles.exposureText}>Tổng phơi nhiễm PM2.5 tuần tới</Text>
+              <Text style={styles.exposureText}>Tổng phơi nhiễm tuần tới</Text>
               <Text style={styles.exposureCig}>
                 ≈ hút <Text style={styles.exposureCigValue}>{cigFuture}</Text> điếu thuốc
               </Text>
@@ -1377,7 +1377,7 @@ export default function AnalyticExposureScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: '#64748b' }}>PM2.5 TB</Text>
-                      <Text style={{ fontSize: 18, fontWeight: '700' }}>{dayStats.avg_pm25 ?? '--'}</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '700' }}>{dayStats.avg_pm25 != null ? `${Number(dayStats.avg_pm25).toFixed(1)} µg/m³` : '--'}</Text>
                     </View>
                     {/* <View style={{ flex: 1 }}>
                       <Text style={{ color: '#64748b' }}>Bản ghi</Text>
@@ -1390,33 +1390,45 @@ export default function AnalyticExposureScreen() {
                       <Text style={{ color: '#64748b' }}>AQI Max</Text>
                       <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.max_aqi ?? '--'}</Text>
                     </View>
-                    <View style={{ flex: 1 }}>
+                    {/* <View style={{ flex: 1 }}>
                       <Text style={{ color: '#64748b' }}>AQI Min</Text>
                       <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.min_aqi ?? '--'}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: '#64748b' }}>Unique locations</Text>
+                    </View> */}
+                     <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#64748b' }}>PM2.5 Max</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600' }}>
+                      {dayStats?.max_pm25 != null
+                        ? `${Number(dayStats.max_pm25).toFixed(1)} µg/m³`
+                        : '--'}
+                    </Text>
+                  </View>
+                    {/* <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#64748b' }}>Số địa điểm</Text>
                       <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.unique_locations ?? '--'}</Text>
-                    </View>
+                    </View> */}
                   </View>
 
                   <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                  <View style={{ flex: 1 }}>
+                  {/* <View style={{ flex: 1 }}>
                     <Text style={{ color: '#64748b' }}>PM2.5 Max</Text>
                     <Text style={{ fontSize: 14, fontWeight: '600' }}>
                       {dayStats?.max_pm25 != null
                         ? Number(dayStats.max_pm25).toFixed(1)
                         : '--'}
                     </Text>
-                  </View>
+                  </View> */}
+                  <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#64748b' }}>AQI Min</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.min_aqi ?? '--'}</Text>
+                    </View>
 
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: '#64748b' }}>PM2.5 Min</Text>
                       <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats?.min_pm25 != null
-                        ? Number(dayStats.min_pm25).toFixed(1)
+                        ? `${Number(dayStats.min_pm25).toFixed(1)} µg/m³`
                         : '--'}</Text>
                     </View>
-                    <View style={{ flex: 1 }} />
+                    {/* <View style={{ flex: 1 }} /> */}
                   </View>
 
                   {/* Most visited locations with counts */}
@@ -2410,6 +2422,7 @@ const styles = StyleSheet.create({
   },
   weekendRadiusContainer: {
     position: 'relative',
+    flexDirection: 'row',
   },
   weekendRadiusButton: {
     flexDirection: 'row',
@@ -2434,8 +2447,9 @@ const styles = StyleSheet.create({
   },
   weekendRadiusMenu: {
     position: 'absolute',
-    top: 60,
-    right: 0,
+    top: '100%',
+    left: 0,
+    marginTop: 6,
     backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
