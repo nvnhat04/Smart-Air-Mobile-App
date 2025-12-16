@@ -72,7 +72,8 @@ export default function DetailStationScreen() {
     humidity: station?.humidity,
     aqi: station?.aqi,
     pm25: station?.pm25,
-    selectedDay: selectedDay?.isoDate
+    selectedDay: selectedDay?.isoDate,
+    timestamp:station?.timestamp
   });
   const [realtimeData, setRealtimeData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -279,11 +280,30 @@ export default function DetailStationScreen() {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
     const displayDate = `${date}/${month}/${year}`;
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const displayTime = `${hours}:${minutes}`;
     return {
       displayDate,
+      displayTime,
       displayLabel: `Hôm nay, ${displayDate}`,
     };
   }, []);
+
+  // Helper to format a timestamp (fallbacks to current time/date)
+  const formatTimestamp = (ts) => {
+    if (!ts) return { time: '', date: now.displayDate };
+    try {
+      const d = new Date(ts);
+      const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      const date = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      return { time, date };
+    } catch (e) {
+      return { time: now.displayTime, date: now.displayDate };
+    }
+  };
+
+  const displayTs = formatTimestamp(station?.timestamp);
 
   const aqiBadge = getAQIBadgeColor(data.aqi || 80);
 
@@ -409,8 +429,13 @@ export default function DetailStationScreen() {
         <View style={styles.locationChipWrapper}>
           <View style={styles.locationChip}>
             <Text style={styles.locationText}>
-              {selectedDay?.label} - {selectedDay?.dateStr}
+              Hôm nay - {displayTs.date}
             </Text>
+            {displayTs.time !== '' && (
+             <Text style={styles.locationText}>
+              {displayTs.time} 
+            </Text>
+            )}
             <Text style={styles.locationText}>
               {data.name || 'Trạm quan trắc'}
             </Text>
@@ -718,6 +743,7 @@ export default function DetailStationScreen() {
                       top: selectedPoint.y - 70,
                     },
                   ]}
+                
                 >
                   <TouchableOpacity
                     style={styles.tooltipClose}
@@ -1453,7 +1479,7 @@ const styles = StyleSheet.create({
   },
   tooltipClose: {
     position: 'absolute',
-    top: 4,
+    top: '0%',
     right: 4,
     width: 20,
     height: 20,
@@ -1463,9 +1489,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   tooltipCloseText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#6b7280',
     fontWeight: '700',
+    lineHeight: 18,
   },
   tooltipDate: {
     fontSize: 12,
