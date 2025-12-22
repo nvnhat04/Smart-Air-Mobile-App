@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import authService from '../services/authService';
+import authService from '../../services/authService';
 
 /**
  * Manage login form state, validation, and submission side-effects.
@@ -54,4 +54,5 @@ export default function useLoginForm({ onSuccess } = {}) {
     submit,
   };
 }
+
 

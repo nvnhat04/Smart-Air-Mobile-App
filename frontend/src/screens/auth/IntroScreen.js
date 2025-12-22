@@ -1,8 +1,11 @@
 import { useNavigation } from '@react-navigation/native';
 import { useRef, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import IntroPagination from '../components/intro/IntroPagination';
-import IntroSlide from '../components/intro/IntroSlide';
+import IntroPagination from '../../components/intro/IntroPagination';
+import IntroSlide from '../../components/intro/IntroSlide';
+import { Feather } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 const slides = [
   {
@@ -58,12 +61,10 @@ export default function IntroScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Skip Button */}
       <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
         <Text style={styles.skipText}>Bỏ qua</Text>
       </TouchableOpacity>
 
-      {/* Slides */}
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -83,10 +84,8 @@ export default function IntroScreen() {
         ))}
       </ScrollView>
 
-      {/* Pagination Dots */}
       <IntroPagination total={slides.length} currentIndex={currentIndex} />
 
-      {/* Next/Get Started Button */}
       <TouchableOpacity style={styles.button} onPress={handleNext}>
         <Text style={styles.buttonText}>
           {currentIndex === slides.length - 1 ? 'Bắt đầu' : 'Tiếp theo'}
@@ -94,7 +93,6 @@ export default function IntroScreen() {
         <Feather name="arrow-right" size={20} color="#fff" style={{ marginLeft: 8 }} />
       </TouchableOpacity>
 
-      {/* SmartAir Branding */}
       <View style={styles.branding}>
         <Text style={styles.brandText}>SmartAir</Text>
         <Text style={styles.brandSubtext}>Giải pháp theo dõi không khí thông minh</Text>
@@ -156,3 +154,5 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
 });
+
+

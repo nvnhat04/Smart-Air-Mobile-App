@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ProfileEditModal from '../components/profile/ProfileEditModal';
-import useProfile from '../hooks/useProfile';
+import ProfileEditModal from '../../components/profile/ProfileEditModal';
+import useProfile from '../../hooks/auth/useProfile';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -42,7 +42,6 @@ export default function ProfileScreen() {
     );
   }
 
-  // Helper component for profile rows
   const ProfileRow = ({ icon, label, value }) => (
     <View style={styles.profileRow}>
       <View style={styles.labelContainer}>
@@ -55,12 +54,11 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.root}>
-      <ScrollView 
-        style={styles.container} 
+      <ScrollView
+        style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with gradient effect */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.avatarContainer}>
@@ -75,7 +73,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Account Info Card */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
           <View style={styles.card}>
@@ -83,18 +80,14 @@ export default function ProfileScreen() {
             {auth.username && (
               <ProfileRow icon="at-sign" label="Tên người dùng" value={auth.username} />
             )}
-            {/* {auth.uid && (
-              <ProfileRow icon="hash" label="User ID" value={auth.uid.slice(0, 12) + '...'} />
-            )} */}
           </View>
         </View>
 
-        {/* Personal Details Card */}
         {profile ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editButton}
                 onPress={openEditModal}
                 activeOpacity={0.7}
@@ -106,15 +99,13 @@ export default function ProfileScreen() {
             <View style={styles.card}>
               <ProfileRow icon="user" label="Họ và tên" value={profile.displayName} />
               {profile.gender && (
-                <ProfileRow 
-                  icon="user" 
-                  label="Giới tính" 
-                  value={profile.gender === 'male' ? 'Nam' : 'Nữ'} 
+                <ProfileRow
+                  icon="user"
+                  label="Giới tính"
+                  value={profile.gender === 'male' ? 'Nam' : 'Nữ'}
                 />
               )}
-              {profile.age && (
-                <ProfileRow icon="calendar" label="Tuổi" value={profile.age} />
-              )}
+              {profile.age && <ProfileRow icon="calendar" label="Tuổi" value={profile.age} />}
               {profile.phone && (
                 <ProfileRow icon="phone" label="Điện thoại" value={profile.phone} />
               )}
@@ -139,18 +130,14 @@ export default function ProfileScreen() {
             <Text style={styles.noticeText}>
               Thông tin cá nhân chưa được cập nhật trên server
             </Text>
-            <TouchableOpacity 
-              style={styles.noticeButton}
-              onPress={openEditModal}
-            >
+            <TouchableOpacity style={styles.noticeButton} onPress={openEditModal}>
               <Text style={styles.noticeButtonText}>Cập nhật ngay</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Logout Button */}
-        <TouchableOpacity 
-          style={styles.logoutButton} 
+        <TouchableOpacity
+          style={styles.logoutButton}
           onPress={handleLogout}
           activeOpacity={0.8}
         >
@@ -184,8 +171,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: 32,
   },
-  
-  // Loading & Empty States
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -237,8 +222,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-
-  // Header with Avatar
   header: {
     backgroundColor: '#2563eb',
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
@@ -275,8 +258,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
   },
-
-  // Section
   section: {
     marginTop: 24,
     paddingHorizontal: 16,
@@ -309,8 +290,6 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     marginLeft: 6,
   },
-
-  // Card
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -323,8 +302,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-
-  // Profile Row
   profileRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -350,8 +327,6 @@ const styles = StyleSheet.create({
     maxWidth: '50%',
     textAlign: 'right',
   },
-
-  // Notice Box
   noticeBox: {
     backgroundColor: '#fef3c7',
     borderRadius: 16,
@@ -381,8 +356,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
   },
-
-  // Logout Button
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -404,5 +377,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginLeft: 8,
   },
-
 });
+
+

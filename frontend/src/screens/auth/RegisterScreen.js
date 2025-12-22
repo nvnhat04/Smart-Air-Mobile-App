@@ -3,9 +3,9 @@ import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AuthButton from '../components/auth/AuthButton';
-import AuthTextInput from '../components/auth/AuthTextInput';
-import useRegisterForm from '../hooks/useRegisterForm';
+import AuthButton from '../../components/auth/AuthButton';
+import AuthTextInput from '../../components/auth/AuthTextInput';
+import useRegisterForm from '../../hooks/auth/useRegisterForm';
 
 export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +52,9 @@ export default function RegisterScreen() {
             icon="at-sign"
             placeholder="Username (3-20 ký tự)"
             value={values.username}
-            onChangeText={(text) => setField('username', text.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+            onChangeText={(text) =>
+              setField('username', text.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+            }
             editable={!loading}
           />
 
@@ -72,7 +74,9 @@ export default function RegisterScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Feather name="user" size={16} color="#8b5cf6" />
-            <Text style={[styles.sectionTitle, { color: '#8b5cf6' }]}>Thông tin cá nhân (Tùy chọn)</Text>
+            <Text style={[styles.sectionTitle, { color: '#8b5cf6' }]}>
+              Thông tin cá nhân (Tùy chọn)
+            </Text>
           </View>
 
           <AuthTextInput
@@ -84,11 +88,11 @@ export default function RegisterScreen() {
             autoCapitalize="words"
           />
 
-          <View style={[styles.inputContainer, styles.pickerContainer]}>
+          <View style={styles.inputContainerWithPicker}>
             <Feather name="users" size={20} color="#64748b" style={styles.inputIcon} />
-            <Picker 
-              selectedValue={values.gender} 
-              onValueChange={(val) => setField('gender', val)} 
+            <Picker
+              selectedValue={values.gender}
+              onValueChange={(val) => setField('gender', val)}
               enabled={!loading}
               style={styles.picker}
             >
@@ -99,7 +103,7 @@ export default function RegisterScreen() {
             </Picker>
           </View>
 
-          <View style={[styles.inputContainer, styles.pickerContainer]}>
+          <View style={styles.inputContainerWithPicker}>
             <Feather name="shield" size={20} color="#64748b" style={styles.inputIcon} />
             <Picker
               selectedValue={values.group}
@@ -170,10 +174,7 @@ export default function RegisterScreen() {
         {/* Login link */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>Đã có tài khoản?</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Login')}
-            disabled={loading}
-          >
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} disabled={loading}>
             <Text style={styles.linkText}>Đăng nhập ngay</Text>
           </TouchableOpacity>
         </View>
@@ -230,7 +231,7 @@ const styles = StyleSheet.create({
     fontWeight: '700', 
     color: '#3b82f6',
   },
-  inputContainer: {
+  inputContainerWithPicker: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
@@ -244,18 +245,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+    paddingRight: 8,
   },
   inputIcon: {
     marginRight: 12,
   },
-  input: {
+  picker: {
     flex: 1,
-    padding: 16,
-    fontSize: 16,
     color: '#0f172a',
-  },
-  eyeIcon: {
-    padding: 8,
   },
   errorContainer: {
     flexDirection: 'row',
@@ -268,41 +265,11 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
   },
   errorText: {
-    color: '#dc2626', // Đỏ đậm hơn
+    color: '#dc2626', 
     fontSize: 15,
     marginLeft: 8,
     flex: 1,
     fontWeight: 'bold',
-  },
-  pickerContainer: {
-    paddingRight: 8,
-  },
-  picker: {
-    flex: 1,
-    color: '#0f172a',
-  },
-  button: {
-    backgroundColor: '#3b82f6',
-    padding: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonDisabled: { 
-    opacity: 0.6 
-  },
-  buttonText: { 
-    color: '#fff', 
-    fontWeight: '700', 
-    fontSize: 18 
   },
   footer: {
     flexDirection: 'row',
@@ -310,6 +277,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingBottom: 30,
+    marginTop: 8,
   },
   footerText: {
     color: '#64748b',
@@ -319,5 +287,7 @@ const styles = StyleSheet.create({
     color: '#3b82f6',
     fontWeight: '700',
     fontSize: 15,
-  }
+  },
 });
+
+

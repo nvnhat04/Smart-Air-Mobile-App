@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import authService from '../services/authService';
+import authService from '../../services/authService';
 
 const emailRegex = /^[\w-.]+@[\w-]+\.[a-zA-Z]{2,}$/;
 const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
@@ -98,4 +98,5 @@ export default function useRegisterForm({ onSuccess } = {}) {
     submit,
   };
 }
+
 

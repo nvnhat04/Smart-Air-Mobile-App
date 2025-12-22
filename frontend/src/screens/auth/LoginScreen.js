@@ -2,9 +2,9 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AuthButton from '../components/auth/AuthButton';
-import AuthTextInput from '../components/auth/AuthTextInput';
-import useLoginForm from '../hooks/useLoginForm';
+import AuthButton from '../../components/auth/AuthButton';
+import AuthTextInput from '../../components/auth/AuthTextInput';
+import useLoginForm from '../../hooks/auth/useLoginForm';
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
@@ -148,3 +148,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
   }
 });
+
+
