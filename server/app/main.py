@@ -7,8 +7,8 @@ from app.api import api_router
 from app.core.config import settings
 from app.db.mongodb import close_mongo_connection, connect_to_mongo
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 # Setup logging
 logging.basicConfig(

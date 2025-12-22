@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # By default, bind to localhost for security. 
     # To expose the server on all interfaces (e.g., for production), set HOST to "0.0.0.0" via environment variable or config file.
     # WARNING: Binding to "0.0.0.0" exposes the server on all network interfaces and may be a security risk in production.
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    HOST: str = "127.0.0.1"
+    PORT: int = 8888
     DEBUG: bool = True
     RELOAD: bool = True
     

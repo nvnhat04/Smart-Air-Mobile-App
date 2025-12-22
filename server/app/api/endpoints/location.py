@@ -149,7 +149,7 @@ async def get_location_history(
     
     # Calculate date range
     vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
-    cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
+    cutoff_date = datetime.now(vn_tz) - timedelta(days=days)  # convert to UTC
     
     # Query database
     cursor = db.locations.find({
@@ -244,7 +244,7 @@ async def get_location_stats(
     # Calculate date range
     vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
     cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
-    
+    print('[get_location_stats] cutoff_date:', cutoff_date)
     # Get all records for the period
     cursor = db.locations.find({
         "user_id": user_id,
@@ -274,7 +274,10 @@ async def get_location_stats(
     # Date range
     timestamps = [loc["timestamp"] for loc in locations]
     start_date = min(timestamps).strftime("%Y-%m-%d")
-    end_date = max(timestamps).strftime("%Y-%m-%d")
+    # Set end_date to yesterday (VN local) to avoid including today's partial data
+    now_local = datetime.now(timezone(timedelta(hours=7)))
+    yesterday_local = (now_local - timedelta(days=1)).date()
+    end_date = yesterday_local.strftime("%Y-%m-%d")
 
     # AQI statistics - filter out null and 0 values
     aqi_values = [loc["aqi"] for loc in locations if loc.get("aqi") is not None and loc.get("aqi") > 0]
