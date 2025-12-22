@@ -2,91 +2,17 @@ import { Feather } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import api from '../services/api';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AuthButton from '../components/auth/AuthButton';
+import AuthTextInput from '../components/auth/AuthTextInput';
+import useRegisterForm from '../hooks/useRegisterForm';
 
 export default function RegisterScreen() {
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [displayName, setDisplayName] = useState('');
-  const [gender, setGender] = useState('');
-  const [age, setAge] = useState('');
-  const [phone, setPhone] = useState('');
-  const [location, setLocation] = useState('');
-  const [city, setCity] = useState('');
-  const [country, setCountry] = useState('');
-  const [group, setGroup] = useState('normal');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const navigation = useNavigation();
-
-  const handleRegister = async () => {
-    if (!email || !username || !password) {
-      setError('Email, username và mật khẩu là bắt buộc');
-      return;
-    }
-
-    // Validate email format
-    const emailRegex = /^[\w-.]+@[\w-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email)) {
-      setError('Email không hợp lệ. Vui lòng nhập đúng định dạng email.');
-      return;
-    }
-
-    // Validate username format
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-      setError('Username phải có 3-20 ký tự và chỉ chứa chữ, số, gạch dưới');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự');
-      return;
-    }
-
-    setLoading(true);
-    setError(''); // Clear previous error
-    try {
-      const profile = {
-        displayName: displayName || undefined,
-        gender: gender || undefined,
-        age: age ? parseInt(age) : undefined,
-        phone: phone || undefined,
-        location: location || undefined,
-        city: city || undefined,
-        country: country || undefined,
-        group: group || undefined
-      };
-
-      // Remove undefined fields
-      Object.keys(profile).forEach(key => profile[key] === undefined && delete profile[key]);
-
-      console.log('[RegisterScreen] Registering with username and profile:', username, profile);
-      const res = await api.auth.register(email, username, password, profile);
-      console.log('[RegisterScreen] Register response:', res);
-      
-      // Alert.alert('Thành công', `Tài khoản đã được tạo! Username: @${res.user?.username || username}`);
-      navigation.navigate('Login');
-    } catch (e) {
-      if (typeof e === 'object') {
-        // console.error('[RegisterScreen] Register error:', JSON.stringify(e));
-        let msg = e.message;
-        if (!msg && typeof e === 'object') {
-          if (e.error) msg = e.error;
-          else if (e.detail) msg = e.detail;
-          else msg = JSON.stringify(e);
-        }
-        setError(msg || 'Đăng ký thất bại. Vui lòng thử lại.');
-      } else {
-        // console.error('[RegisterScreen] Register error:', e);
-        setError(String(e) || 'Đăng ký thất bại. Vui lòng thử lại.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { values, loading, error, setField, submit } = useRegisterForm({
+    onSuccess: () => navigation.navigate('Login'),
+  });
 
   return (
     <KeyboardAvoidingView 
@@ -114,56 +40,32 @@ export default function RegisterScreen() {
             <Text style={styles.sectionTitle}>Thông tin bắt buộc</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Feather name="mail" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#94a3b8"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="mail"
+            placeholder="Email"
+            value={values.email}
+            onChangeText={(val) => setField('email', val)}
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="at-sign" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Username (3-20 ký tự)"
-              placeholderTextColor="#94a3b8"
-              value={username}
-              onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="at-sign"
+            placeholder="Username (3-20 ký tự)"
+            value={values.username}
+            onChangeText={(text) => setField('username', text.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="lock" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Mật khẩu (tối thiểu 6 ký tự)"
-              placeholderTextColor="#94a3b8"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              editable={!loading}
-            />
-            <TouchableOpacity 
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeIcon}
-            >
-              <Feather 
-                name={showPassword ? 'eye' : 'eye-off'} 
-                size={20} 
-                color="#94a3b8" 
-              />
-            </TouchableOpacity>
-          </View>
+          <AuthTextInput
+            icon="lock"
+            placeholder="Mật khẩu (tối thiểu 6 ký tự)"
+            value={values.password}
+            onChangeText={(val) => setField('password', val)}
+            secureTextEntry
+            showSecure={showPassword}
+            onToggleSecure={() => setShowPassword((prev) => !prev)}
+            editable={!loading}
+          />
         </View>
 
         {/* Optional profile fields */}
@@ -173,23 +75,20 @@ export default function RegisterScreen() {
             <Text style={[styles.sectionTitle, { color: '#8b5cf6' }]}>Thông tin cá nhân (Tùy chọn)</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Feather name="user" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Họ và tên"
-              placeholderTextColor="#94a3b8"
-              value={displayName}
-              onChangeText={setDisplayName}
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="user"
+            placeholder="Họ và tên"
+            value={values.displayName}
+            onChangeText={(val) => setField('displayName', val)}
+            editable={!loading}
+            autoCapitalize="words"
+          />
 
           <View style={[styles.inputContainer, styles.pickerContainer]}>
             <Feather name="users" size={20} color="#64748b" style={styles.inputIcon} />
             <Picker 
-              selectedValue={gender} 
-              onValueChange={setGender} 
+              selectedValue={values.gender} 
+              onValueChange={(val) => setField('gender', val)} 
               enabled={!loading}
               style={styles.picker}
             >
@@ -203,8 +102,8 @@ export default function RegisterScreen() {
           <View style={[styles.inputContainer, styles.pickerContainer]}>
             <Feather name="shield" size={20} color="#64748b" style={styles.inputIcon} />
             <Picker
-              selectedValue={group}
-              onValueChange={setGroup}
+              selectedValue={values.group}
+              onValueChange={(val) => setField('group', val)}
               enabled={!loading}
               style={styles.picker}
             >
@@ -214,67 +113,47 @@ export default function RegisterScreen() {
             </Picker>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Feather name="calendar" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Tuổi"
-              placeholderTextColor="#94a3b8"
-              value={age}
-              onChangeText={setAge}
-              keyboardType="numeric"
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="calendar"
+            placeholder="Tuổi"
+            value={values.age}
+            onChangeText={(val) => setField('age', val)}
+            keyboardType="numeric"
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="phone" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Số điện thoại"
-              placeholderTextColor="#94a3b8"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="phone"
+            placeholder="Số điện thoại"
+            value={values.phone}
+            onChangeText={(val) => setField('phone', val)}
+            keyboardType="phone-pad"
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="map-pin" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Địa chỉ"
-              placeholderTextColor="#94a3b8"
-              value={location}
-              onChangeText={setLocation}
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="map-pin"
+            placeholder="Địa chỉ"
+            value={values.location}
+            onChangeText={(val) => setField('location', val)}
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="map" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Thành phố"
-              placeholderTextColor="#94a3b8"
-              value={city}
-              onChangeText={setCity}
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="map"
+            placeholder="Thành phố"
+            value={values.city}
+            onChangeText={(val) => setField('city', val)}
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="globe" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Quốc gia"
-              placeholderTextColor="#94a3b8"
-              value={country}
-              onChangeText={setCountry}
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="globe"
+            placeholder="Quốc gia"
+            value={values.country}
+            onChangeText={(val) => setField('country', val)}
+            editable={!loading}
+          />
         </View>
 
         {/* Error Message */}
@@ -286,20 +165,7 @@ export default function RegisterScreen() {
         ) : null}
 
         {/* Submit button */}
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleRegister}
-          disabled={loading}
-        >
-          {loading ? (
-            <Text style={styles.buttonText}>Đang tạo tài khoản...</Text>
-          ) : (
-            <>
-              <Text style={styles.buttonText}>Tạo tài khoản</Text>
-              <Feather name="arrow-right" size={20} color="#fff" style={{ marginLeft: 8 }} />
-            </>
-          )}
-        </TouchableOpacity>
+        <AuthButton title="Tạo tài khoản" loading={loading} onPress={submit} />
 
         {/* Login link */}
         <View style={styles.footer}>

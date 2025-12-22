@@ -10,6 +10,10 @@ export default function AuthTextInput({
   editable = true,
   onToggleSecure,
   showSecure = false,
+  keyboardType = 'default',
+  autoCapitalize = 'none',
+  autoCorrect = false,
+  ...rest
 }) {
   return (
     <View style={styles.inputContainer}>
@@ -20,10 +24,12 @@ export default function AuthTextInput({
         placeholderTextColor="#94a3b8"
         value={value}
         onChangeText={onChangeText}
-        autoCapitalize="none"
-        autoCorrect={false}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        keyboardType={keyboardType}
         secureTextEntry={secureTextEntry && !showSecure}
         editable={editable}
+        {...rest}
       />
       {secureTextEntry ? (
         <TouchableOpacity onPress={onToggleSecure} style={styles.eyeIcon} disabled={!editable}>
