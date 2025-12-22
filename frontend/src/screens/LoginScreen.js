@@ -1,46 +1,17 @@
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import api from '../services/api';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AuthButton from '../components/auth/AuthButton';
+import AuthTextInput from '../components/auth/AuthTextInput';
+import useLoginForm from '../hooks/useLoginForm';
 
 export default function LoginScreen() {
-  const [emailOrUsername, setEmailOrUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const navigation = useNavigation();
-
-  const handleLogin = async () => {
-    if (!emailOrUsername || !password) {
-      setError('Vui lòng nhập email/username và mật khẩu');
-      return;
-    }
-
-    setLoading(true);
-    setError(''); // Clear previous error
-    try {
-      const data = await api.auth.login(emailOrUsername, password);
-      console.log('Login success', data);
-      // Save auth info locally
-      const authData = {
-        access_token: data.access_token,
-        token_type: data.token_type,
-        uid: data.user?._id || null,
-        email: data.user?.email || null,
-        username: data.user?.username || null
-      };
-      await AsyncStorage.setItem('auth', JSON.stringify(authData));
-      navigation.navigate('MainTabs');
-    } catch (e) {
-      console.error('Login error', e);
-      setError(e.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { values, loading, error, setField, submit } = useLoginForm({
+    onSuccess: () => navigation.navigate('MainTabs'),
+  });
 
   return (
     <KeyboardAvoidingView 
@@ -63,42 +34,24 @@ export default function LoginScreen() {
 
         {/* Form */}
         <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Feather name="user" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput 
-              style={styles.input} 
-              placeholder="Email hoặc Username" 
-              placeholderTextColor="#94a3b8"
-              value={emailOrUsername} 
-              onChangeText={setEmailOrUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
+          <AuthTextInput
+            icon="user"
+            placeholder="Email hoặc Username"
+            value={values.identifier}
+            onChangeText={(val) => setField('identifier', val)}
+            editable={!loading}
+          />
 
-          <View style={styles.inputContainer}>
-            <Feather name="lock" size={20} color="#64748b" style={styles.inputIcon} />
-            <TextInput 
-              style={styles.input} 
-              placeholder="Mật khẩu" 
-              placeholderTextColor="#94a3b8"
-              secureTextEntry={!showPassword}
-              value={password} 
-              onChangeText={setPassword}
-              editable={!loading}
-            />
-            <TouchableOpacity 
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeIcon}
-            >
-              <Feather 
-                name={showPassword ? 'eye' : 'eye-off'} 
-                size={20} 
-                color="#94a3b8" 
-              />
-            </TouchableOpacity>
-          </View>
+          <AuthTextInput
+            icon="lock"
+            placeholder="Mật khẩu"
+            value={values.password}
+            onChangeText={(val) => setField('password', val)}
+            secureTextEntry
+            showSecure={showPassword}
+            onToggleSecure={() => setShowPassword((prev) => !prev)}
+            editable={!loading}
+          />
 
           {/* Error Message */}
           {error ? (
@@ -108,20 +61,7 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          <TouchableOpacity 
-            style={[styles.button, loading && styles.buttonDisabled]} 
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <Text style={styles.buttonText}>Đang đăng nhập...</Text>
-            ) : (
-              <>
-                <Text style={styles.buttonText}>Đăng nhập</Text>
-                <Feather name="arrow-right" size={20} color="#fff" style={{ marginLeft: 8 }} />
-              </>
-            )}
-          </TouchableOpacity>
+          <AuthButton title="Đăng nhập" loading={loading} onPress={submit} />
         </View>
 
         {/* Footer */}
@@ -176,33 +116,6 @@ const styles = StyleSheet.create({
   form: {
     marginBottom: 24,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: { 
-    flex: 1,
-    padding: 16,
-    fontSize: 16,
-    color: '#0f172a',
-  },
-  eyeIcon: {
-    padding: 8,
-  },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -218,28 +131,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 8,
     flex: 1,
-  },
-  button: { 
-    backgroundColor: '#3b82f6',
-    padding: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: { 
-    color: '#fff', 
-    fontWeight: '700',
-    fontSize: 18,
   },
   footer: {
     flexDirection: 'row',
