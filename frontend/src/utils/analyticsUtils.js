@@ -238,7 +238,7 @@ export const processLocationHistory = async (historyData, forceRefresh = false, 
   const forecastPromises = [];
   const forecastMeta = [];
   
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i < 8; i++) {
     // Lấy vị trí của ngày đối xứng trong quá khứ (ngày -(7-i))
     const pastDayOffset = -(8 - i); // -7, -6, -5, -4, -3, -2, -1
     const pastDate = new Date(today);
@@ -252,8 +252,8 @@ export const processLocationHistory = async (historyData, forceRefresh = false, 
       const top3Locations = getTop3Locations(pastDayRecords);
       const pastRecord = top3Locations[0];
 
-      console.log(`[Forecast Day +${i}] Top 3 locations from past day ${pastDayOffset}:`, top3Locations);
-      console.log(`[Forecast Day +${i}] Using location: ${pastRecord}`);
+      // console.log(`[Forecast Day +${i}] Top 3 locations from past day ${pastDayOffset}:`, top3Locations);
+      // console.log(`[Forecast Day +${i}] Using location: ${pastRecord}`);
 
       const lat = parseFloat(pastRecord.latitude);
       const lon = parseFloat(pastRecord.longitude);

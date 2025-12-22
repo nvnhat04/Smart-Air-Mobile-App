@@ -47,8 +47,8 @@ try {
 const DEFAULT_FALLBACK = 'http://10.0.2.2:8000';
 const DEPLOY_URL = 'https://smart-air-mobile-app.onrender.com'; // Thay bằng Vercel URL sau khi deploy
 // Thay YOUR_WIFI_IP bằng IP máy tính của bạn (xem bằng lệnh ipconfig)
-const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // VD: 192.168.1.10, 10.0.0.5, etc.
-// const LOCAL_NETWORK_URL = ''; // VD:
+const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // VD: http://192.168.1.10:8000, http://10.0.0.5:8000, etc.
+// const LOCAL_NETWORK_URL = 'http://118.70.181.146:58888'; // VD:
 const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
 
 
@@ -210,7 +210,7 @@ const api = {
   },
 
   // GET /pm25/forecast?lat=21.0285&lon=105.8542&days=7
-  getPM25Forecast: async (lat, lon, days = 8) => {
+  getPM25Forecast: async (lat, lon, days = 7) => {
     const url = `${BASE_URL}/pm25/forecast?lat=${lat}&lon=${lon}&days=${days}`;
     console.warn(`[api.js] getPM25Forecast: GET from ${url}`);
     try {

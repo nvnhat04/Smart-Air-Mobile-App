@@ -40,8 +40,21 @@ export default function AnalyticExposureScreen() {
   // When the date filter changes in the History tab, load the corresponding day stats
   useEffect(() => {
     if (!dateFilter || typeof dateFilter !== 'string') return;
-    const isSpecificDate = /^\d{4}-\d{2}-\d{2}$/.test(dateFilter);
-    if (!isSpecificDate) {
+
+    // Support both specific date strings (YYYY-MM-DD) and the special 'today' filter
+    let targetDate = null;
+    if (dateFilter === 'today') {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      targetDate = `${yyyy}-${mm}-${dd}`;
+    } else {
+      const isSpecificDate = /^\d{4}-\d{2}-\d{2}$/.test(dateFilter);
+      if (isSpecificDate) targetDate = dateFilter;
+    }
+
+    if (!targetDate) {
       setDayStats(null);
       return;
     }
@@ -50,13 +63,14 @@ export default function AnalyticExposureScreen() {
     const fetchStats = async () => {
       try {
         setDayStats(null);
-        const stats = await api.getLocationStatsForDay(dateFilter);
+        console.log('[AnalyticExposureScreen] Loading day stats for date:', targetDate);
+        const stats = await api.getLocationStatsForDay(targetDate);
         if (!cancelled) {
           setDayStats(stats);
           setHistoryLoaded(true);
         }
       } catch (err) {
-        if (!cancelled) console.error('[AnalyticExposureScreen] Failed to load day stats (dateFilter):', err.message || err);
+        if (!cancelled) console.error('[AnalyticExposureScreen] Failed to load day stats:', err.message || err);
       }
     };
 
@@ -502,7 +516,9 @@ export default function AnalyticExposureScreen() {
   const pastSlice = analyticsData.filter(d => d.type === 'past');
   // console.log('[AnalyticExposureScreen] pastSlice length:', pastSlice);
   const presentSlice = analyticsData.filter(d => d.type === 'present');
-  const futureSlice = analyticsData.filter(d => d.type === 'future');
+  // Respect `statsPeriod` when computing future slice — only include next N days
+  const futureAll = analyticsData.filter(d => d.type === 'future');
+  const futureSlice = futureAll.slice(0, Math.max(0, Number(statsPeriod) || 0));
 
   // Thống kê top location từng ngày quá khứ (7 ngày)
   const topLocationsByDay = useMemo(() => getTopLocationsByDay(historyData), [historyData]);
@@ -534,12 +550,37 @@ export default function AnalyticExposureScreen() {
   // console.log("Length data ",locationStats);
   const futurePm25Avg = aqiToPm25(futureAvg).toFixed(1);
   const cigPast = locationStats ? (pastPm25Avg * (locationStats.length == 0 ? 1 : locationStats.length) / 22).toFixed(1) : '0.0';
-  const cigFuture = locationStats ? (futurePm25Avg * 7 / 22).toFixed(1) : '0.0';
+  // Use selected statsPeriod when estimating cigarette-equivalent exposure for the future window
+  const cigFuture = locationStats ? (Number(futurePm25Avg) * (Number(statsPeriod) || 7) / 22).toFixed(1) : '0.0';
 
   const maxAqi = Math.max(...analyticsData.map((d) => d.aqi * exposureMultiplier), 10);
 
   const radiusOptions = [20, 50, 70, 100, 120, 150, 200];
 
+  // Helper: format a Date as dd-mm-yyyy
+  const formatDate = (d) => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}`;
+  };
+
+  // Return a display range for the past `period` days ending today
+  const getDateRangeForecast = (period) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() +1);
+    end.setDate(start.getDate() + (Number(period) - 1));
+    
+    return `${formatDate(start)} - ${formatDate(end)}`;
+  };
+ const getDateRangePast = (period) => {
+    const end = new Date();
+    const start = new Date();
+    end.setDate(end.getDate() - 1);
+    start.setDate(end.getDate() - (Number(period) - 1));
+    return `${formatDate(start)} - ${formatDate(end)}`;
+  };
   return (
     <ScrollView
       style={styles.container}
@@ -851,7 +892,7 @@ export default function AnalyticExposureScreen() {
               })()
             )}
             {/* Details button to open History tab for the selected past day */}
-            {selectedData.type === 'past' && (
+            {(selectedData.type === 'past' || selectedData.type === 'present') && (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
@@ -946,7 +987,7 @@ export default function AnalyticExposureScreen() {
               activeOpacity={0.7}
             >
               <Text style={styles.statsPeriodDropdownText}>
-                {statsPeriod === 1 ? '1 ngày' : statsPeriod === 3 ? '3 ngày' : '7 ngày'}
+                {statsPeriod === 3 ? '3 ngày' :statsPeriod === 5 ? '5 ngày' : '7 ngày'}
               </Text>
               <Feather 
                 name={showStatsPeriodMenu ? 'chevron-up' : 'chevron-down'} 
@@ -956,18 +997,7 @@ export default function AnalyticExposureScreen() {
             </TouchableOpacity>
             {showStatsPeriodMenu && (
               <View style={styles.statsPeriodMenu}>
-                <TouchableOpacity
-                  style={[styles.statsPeriodMenuItem, statsPeriod === 1 && styles.statsPeriodMenuItemActive]}
-                  onPress={() => {
-                    setStatsPeriod(1);
-                    setShowStatsPeriodMenu(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.statsPeriodMenuText, statsPeriod === 1 && styles.statsPeriodMenuTextActive]}>
-                    1 ngày
-                  </Text>
-                </TouchableOpacity>
+              
                 <TouchableOpacity
                   style={[styles.statsPeriodMenuItem, statsPeriod === 3 && styles.statsPeriodMenuItemActive]}
                   onPress={() => {
@@ -978,6 +1008,18 @@ export default function AnalyticExposureScreen() {
                 >
                   <Text style={[styles.statsPeriodMenuText, statsPeriod === 3 && styles.statsPeriodMenuTextActive]}>
                     3 ngày
+                  </Text>
+                </TouchableOpacity>
+                  <TouchableOpacity
+                  style={[styles.statsPeriodMenuItem, statsPeriod === 1 && styles.statsPeriodMenuItemActive]}
+                  onPress={() => {
+                    setStatsPeriod(5);
+                    setShowStatsPeriodMenu(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.statsPeriodMenuText, statsPeriod === 5 && styles.statsPeriodMenuTextActive]}>
+                    5 ngày
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1007,7 +1049,12 @@ export default function AnalyticExposureScreen() {
           <View style={styles.exposureSection}>
             {/* Past card */}
             <View style={styles.exposureCardPast}>
-              <Text style={styles.exposureTag}>{statsPeriod === 1 ? 'HÔM QUA' : statsPeriod === 3 ? '3 NGÀY QUA' : '7 NGÀY QUA'}</Text>
+              <Text style={styles.exposureTag}>
+                {statsPeriod === 5 ? '5 NGÀY QUA' : statsPeriod === 3 ? '3 NGÀY QUA' : '7 NGÀY QUA'}
+              </Text>
+               <Text style={styles.exposureDays}>
+                {getDateRangePast(statsPeriod)}
+              </Text>
               <Text style={styles.exposureAqi}>{pastAvg}</Text>
               <Text style={styles.exposureAqiLabel}>AQI VN Trung bình</Text>
               {/* Min/Max AQI */}
@@ -1039,6 +1086,9 @@ export default function AnalyticExposureScreen() {
             {/* Future card */}
             <View style={styles.exposureCardFuture}>
               <Text style={[styles.exposureTag, { color: '#2563eb' }]}>{statsPeriod === 1 ? 'HÔM NAY' : statsPeriod === 3 ? '3 NGÀY TỚI' : '7 NGÀY TỚI'}</Text>
+               <Text style={styles.exposureDays}>
+                {getDateRangeForecast(statsPeriod)}
+              </Text>
               <Text style={[styles.exposureAqi, { color: '#2563eb' }]}>{futureAvg}</Text>
               <Text style={styles.exposureAqiLabel}>AQI VN trung bình</Text>
               {/* Min/Max AQI tuần tới */}
@@ -1084,7 +1134,7 @@ export default function AnalyticExposureScreen() {
           </View>
         )}
       </View>
-
+  
       {/* Chú thích dưới thống kê phơi nhiễm */}
       <View style={styles.exposureNoteCard}>
         <View style={styles.exposureNoteIconBox}>
@@ -1167,7 +1217,7 @@ export default function AnalyticExposureScreen() {
               activeOpacity={0.8}
             >
               <Feather name="clock" size={12} color="#1d4ed8" />
-              <Text style={styles.weekendRadiusButtonText}>{escapeForecastDays === 1 ? '24h' : `${escapeForecastDays} ngày`}</Text>
+              <Text style={styles.weekendRadiusButtonText}>{ `${escapeForecastDays} ngày`}</Text>
               <Feather
                 name={showEscapeDaysMenu ? 'chevron-up' : 'chevron-down'}
                 size={12}
@@ -1187,7 +1237,7 @@ export default function AnalyticExposureScreen() {
                     }}
                   >
                     <Text style={[styles.weekendRadiusMenuText, escapeForecastDays === d && styles.weekendRadiusMenuTextActive]}>
-                      {d === 1 ? '24h' : `${d} ngày`}
+                      { `${d} ngày`}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1372,11 +1422,11 @@ export default function AnalyticExposureScreen() {
 
                   <View style={{ flexDirection: 'row', marginTop: 8 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: '#64748b' }}>AQI TB</Text>
+                      <Text style={{ color: '#64748b' }}>AQI VN Trung bình</Text>
                       <Text style={{ fontSize: 18, fontWeight: '700' }}>{dayStats.avg_aqi ?? '--'}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: '#64748b' }}>PM2.5 TB</Text>
+                      <Text style={{ color: '#64748b' }}>PM2.5 Trung bình</Text>
                       <Text style={{ fontSize: 18, fontWeight: '700' }}>{dayStats.avg_pm25 != null ? `${Number(dayStats.avg_pm25).toFixed(1)} µg/m³` : '--'}</Text>
                     </View>
                     {/* <View style={{ flex: 1 }}>
@@ -1387,7 +1437,7 @@ export default function AnalyticExposureScreen() {
 
                   <View style={{ flexDirection: 'row', marginTop: 10 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: '#64748b' }}>AQI Max</Text>
+                      <Text style={{ color: '#64748b' }}>AQI VN Max</Text>
                       <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.max_aqi ?? '--'}</Text>
                     </View>
                     {/* <View style={{ flex: 1 }}>
@@ -1418,7 +1468,7 @@ export default function AnalyticExposureScreen() {
                     </Text>
                   </View> */}
                   <View style={{ flex: 1 }}>
-                      <Text style={{ color: '#64748b' }}>AQI Min</Text>
+                      <Text style={{ color: '#64748b' }}>AQI VN Min</Text>
                       <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.min_aqi ?? '--'}</Text>
                     </View>
 
@@ -2151,6 +2201,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#4b5563',
+    marginBottom: 4,
+  },
+   exposureDays: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#8b8d90ff',
     marginBottom: 4,
   },
   exposureAqi: {

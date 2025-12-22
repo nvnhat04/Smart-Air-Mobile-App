@@ -1,16 +1,16 @@
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import GoodIcon from '../components/icon/good';
+import MaroonIcon from '../components/icon/maroon';
+import OrangeIcon from '../components/icon/orange';
+import PurpleIcon from '../components/icon/purple';
+import RedIcon from '../components/icon/red';
+import YellowIcon from '../components/icon/yellow';
 import { UserGroupSelector } from '../components/ui';
 import { BASE_URL } from '../services/api';
 import { getHealthAdvice } from '../utils/mapUtils';
-import GoodIcon from '../components/icon/good';
-import YellowIcon from '../components/icon/yellow';
-import OrangeIcon from '../components/icon/orange';
-import RedIcon from '../components/icon/red';
-import PurpleIcon from '../components/icon/purple';
-import MaroonIcon from '../components/icon/maroon';
 function generateWeeklyData(baseColor) {
   const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
   const today = new Date();
@@ -453,7 +453,7 @@ export default function DetailStationScreen() {
           <View style={styles.headerCenter}>
             {/* Cột trái: Số AQI */}
             <View style={styles.aqiColumn}>
-              <Text style={styles.aqiLabelText}>AQI</Text>
+              <Text style={styles.aqiLabelText}>AQI VN</Text>
               <View style={styles.aqiCircleWrapper}>
                 <View style={styles.aqiCircleGlow} />
                 <Text style={styles.aqiNumber}>{data.aqi ?? 0}</Text>
@@ -703,18 +703,27 @@ export default function DetailStationScreen() {
                   })}
                   
                   {/* Vẽ các điểm có thể chạm - màu theo AQI */}
-                  {chartData.points.map((point, idx) => (
-                    <Circle
-                      key={idx}
-                      cx={point.x}
-                      cy={point.y}
-                      r={selectedPoint?.idx === point.idx ? 7 : 5}
-                      fill={point.color || '#2563eb'}
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                      onPress={() => setSelectedPoint(point)}
-                    />
-                  ))}
+                  {chartData.points.map((point, idx) => {
+                    const isToday = point.idx === 0; // first point corresponds to today
+                    const isSelected = selectedPoint?.idx === point.idx;
+                    const radius = isToday ? (isSelected ? 9 : 7) : (isSelected ? 7 : 5);
+                    const fillColor = getAQIColor(point.aqi);
+                    const strokeColor = isToday ? '#632626ff' : '#ffffff';
+                    const strokeW = isToday ? 3 : 2;
+
+                    return (
+                      <Circle
+                        key={idx}
+                        cx={point.x}
+                        cy={point.y}
+                        r={radius}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        strokeWidth={strokeW}
+                        onPress={() => setSelectedPoint(point)}
+                      />
+                    );
+                  })}
                 </Svg>
               
               {/* Các nút invisible để dễ chạm hơn */}
@@ -876,7 +885,7 @@ export default function DetailStationScreen() {
                           { color: aqiTextColor, fontWeight: '700' },
                         ]}
                       >
-                        {hasData ? `${item.aqi} AQI` : 'Chưa có'}
+                        {hasData ? `${item.aqi}` : 'Chưa có'}
                       </Text>
                     </View>
                   </View>
@@ -1421,7 +1430,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   forecastAqiText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
   },
   forecastHintText: {

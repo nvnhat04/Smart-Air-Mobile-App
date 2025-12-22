@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -282,6 +283,18 @@ const generateLeafletHTML = (baseUrl) => `
         }
       }
 
+      // Clear / remove the external (GPS/custom) marker from the map
+      window.__clearExternalMarker = function () {
+        try {
+          if (externalMarker) {
+            try { map.removeLayer(externalMarker); } catch (e) {}
+            externalMarker = null;
+          }
+        } catch (e) {
+          console.error('clearExternalMarker error', e);
+        }
+      };
+
       window.__setMapCenter = function (lat, lng) {
         try {
           map.setView([lat, lng], 12);
@@ -439,6 +452,37 @@ const generateLeafletHTML = (baseUrl) => `
 
 export default function MapScreen() {
   const { saveCurrentLocation } = useLocationTracking(true); // Enable auto-tracking
+  // On mount: ensure location permission is requested first
+  useEffect(() => {
+    let mounted = true;
+    const ensurePermission = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') return;
+
+        const res = await Location.requestForegroundPermissionsAsync();
+        if (res.status === 'granted') {
+          console.log('[MapScreen] Location permission granted');
+          return;
+        }
+
+        // If permission denied, prompt user to open settings
+        Alert.alert(
+          'Cho phép vị trí',
+          'Ứng dụng cần quyền vị trí để hiển thị bản đồ và vị trí của bạn. Vui lòng bật quyền trong Cài đặt.',
+          [
+            { text: 'Huỷ', style: 'cancel' },
+            { text: 'Mở cài đặt', onPress: () => Linking.openSettings() },
+          ],
+        );
+      } catch (e) {
+        console.warn('[MapScreen] Permission check error', e);
+      }
+    };
+
+    ensurePermission();
+    return () => { mounted = false; };
+  }, []);
   const [dayOptions] = useState(createDayOptions);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [dayMenuOpen, setDayMenuOpen] = useState(false);
@@ -1203,7 +1247,16 @@ export default function MapScreen() {
               // Get full station data from cemStations by id
               const stationId = data.payload.id;
               const fullStation = cemStations.find(s => s.id === stationId);
-              
+
+              // Hide any external GPS/custom marker when a station is selected
+              try {
+                if (webviewRef.current) {
+                  webviewRef.current.injectJavaScript("window.__clearExternalMarker && window.__clearExternalMarker(); true;");
+                }
+              } catch (e) {
+                console.warn('inject clearExternalMarker failed', e);
+              }
+
               if (fullStation) {
                 // Use full data from CEM API directly - don't recalculate AQI
                 // The AQI from cemStations is already correct from the API

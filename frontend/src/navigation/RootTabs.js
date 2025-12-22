@@ -92,7 +92,7 @@ export default function RootTabs() {
           ),
         }}
       />
-      <Tab.Screen
+      {/* <Tab.Screen
         name="AIChat"
         component={AIChatScreen}
         options={{
@@ -108,7 +108,7 @@ export default function RootTabs() {
             <SimpleTabLabel label="AI Chat" focused={focused} />
           ),
         }}
-      />
+      /> */}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
