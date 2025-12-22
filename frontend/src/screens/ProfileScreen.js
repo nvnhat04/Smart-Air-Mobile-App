@@ -1,163 +1,24 @@
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import api from '../services/api';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ProfileEditModal from '../components/profile/ProfileEditModal';
+import useProfile from '../hooks/useProfile';
 
 export default function ProfileScreen() {
-  const [loading, setLoading] = useState(true);
-  const [auth, setAuth] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({
-    displayName: '',
-    gender: '',
-    age: '',
-    phone: '',
-    city: '',
-    country: '',
-    group: '',
-  });
-  const [saving, setSaving] = useState(false);
   const navigation = useNavigation();
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem('auth');
-        if (!raw) {
-          // Not logged in
-          navigation.navigate('Login');
-          return;
-        }
-        const authData = JSON.parse(raw);
-        setAuth(authData);
-
-        // Try to fetch profile from server
-        if (authData.uid) {
-          try {
-            const res = await fetch(`${api.AUTH_BASE}/profile/${authData.uid}`);
-            if (res.ok) {
-              const json = await res.json();
-              setProfile(json.profile || null);
-              console.log('[ProfileScreen] profile loaded from server', json);
-            } else {
-              console.warn('[ProfileScreen] profile fetch failed', res.status);
-            }
-          } catch (e) {
-            console.warn('[ProfileScreen] failed to fetch profile:', e.message);
-          }
-        }
-      } catch (e) {
-        console.error('[ProfileScreen] Init error', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const handleLogout = () => {
-    Alert.alert(
-      "Xác nhận đăng xuất",
-      "Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?",
-      [
-        {
-          text: "Hủy",
-          style: "cancel"
-        },
-        {
-          text: "Đăng xuất",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('auth');
-              setAuth(null);
-              setProfile(null);
-              navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-            } catch (e) {
-              console.error('[ProfileScreen] logout error', e);
-              Alert.alert('Đăng xuất thất bại', String(e));
-            }
-          }
-        }
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const handleEditProfile = () => {
-    setEditForm({
-      displayName: profile?.displayName || '',
-      gender: profile?.gender || '',
-      age: profile?.age?.toString() || '',
-      phone: profile?.phone || '',
-      city: profile?.city || '',
-      country: profile?.country || '',
-      group: profile?.group || 'normal',
-    });
-    setShowEditModal(true);
-  };
-
-  const handleSaveProfile = async () => {
-    try {
-      setSaving(true);
-      
-      // Validate form
-      if (!editForm.displayName.trim()) {
-        Alert.alert('Lỗi', 'Vui lòng nhập họ và tên');
-        return;
-      }
-
-      // Prepare data
-      const updatedProfile = {
-        displayName: editForm.displayName.trim(),
-        gender: editForm.gender || null,
-        age: editForm.age ? parseInt(editForm.age) : null,
-        phone: editForm.phone.trim() || null,
-        city: editForm.city.trim() || null,
-        country: editForm.country.trim() || null,
-        group: editForm.group || null,
-      };
-
-      // Get JWT token
-      const authStr = await AsyncStorage.getItem('auth');
-      const authData = authStr ? JSON.parse(authStr) : null;
-      const token = authData?.token || authData?.access_token;
-
-      if (!token) {
-        Alert.alert('Lỗi', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-        return;
-      }
-
-      // Call API to update profile
-      const res = await fetch(`${api.AUTH_BASE}/profile/${auth.uid}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ profile: updatedProfile }),
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        setProfile(json.profile || updatedProfile);
-        setShowEditModal(false);
-        Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
-      } else {
-        const errorText = await res.text();
-        console.error('Update profile failed:', errorText);
-        Alert.alert('Lỗi', 'Không thể cập nhật thông tin. Vui lòng thử lại.');
-      }
-    } catch (e) {
-      console.error('[ProfileScreen] save profile error:', e);
-      Alert.alert('Lỗi', 'Đã có lỗi xảy ra. Vui lòng thử lại.');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const {
+    loading,
+    auth,
+    profile,
+    showEditModal,
+    editForm,
+    saving,
+    setEditForm,
+    handleLogout,
+    openEditModal,
+    closeEditModal,
+    handleSaveProfile,
+  } = useProfile(navigation);
 
   if (loading) {
     return (
@@ -235,7 +96,7 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
               <TouchableOpacity 
                 style={styles.editButton}
-                onPress={handleEditProfile}
+                onPress={openEditModal}
                 activeOpacity={0.7}
               >
                 <Feather name="edit-2" size={16} color="#2563eb" />
@@ -280,7 +141,7 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity 
               style={styles.noticeButton}
-              onPress={handleEditProfile}
+              onPress={openEditModal}
             >
               <Text style={styles.noticeButtonText}>Cập nhật ngay</Text>
             </TouchableOpacity>
@@ -300,181 +161,14 @@ export default function ProfileScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* Edit Profile Modal */}
-      <Modal
+      <ProfileEditModal
         visible={showEditModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity 
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowEditModal(false)}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chỉnh sửa thông tin</Text>
-              <TouchableOpacity 
-                onPress={() => setShowEditModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Feather name="x" size={24} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView 
-              style={styles.modalBody}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Display Name */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Họ và tên *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Nhập họ và tên"
-                  value={editForm.displayName}
-                  onChangeText={(text) => setEditForm({...editForm, displayName: text})}
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* Gender */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Giới tính</Text>
-                <View style={styles.genderRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.genderButton,
-                      editForm.gender === 'male' && styles.genderButtonActive
-                    ]}
-                    onPress={() => setEditForm({...editForm, gender: 'male'})}
-                  >
-                    <Feather 
-                      name="male" 
-                      size={18} 
-                      color={editForm.gender === 'male' ? '#2563eb' : '#64748b'} 
-                    />
-                    <Text style={[
-                      styles.genderButtonText,
-                      editForm.gender === 'male' && styles.genderButtonTextActive
-                    ]}>Nam</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.genderButton,
-                      editForm.gender === 'female' && styles.genderButtonActive
-                    ]}
-                    onPress={() => setEditForm({...editForm, gender: 'female'})}
-                  >
-                    <Feather 
-                      name="female" 
-                      size={18} 
-                      color={editForm.gender === 'female' ? '#2563eb' : '#64748b'} 
-                    />
-                    <Text style={[
-                      styles.genderButtonText,
-                      editForm.gender === 'female' && styles.genderButtonTextActive
-                    ]}>Nữ</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Age */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Tuổi</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Nhập tuổi"
-                  value={editForm.age}
-                  onChangeText={(text) => setEditForm({...editForm, age: text.replace(/[^0-9]/g, '')})}
-                  keyboardType="number-pad"
-                  maxLength={3}
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* Phone */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Số điện thoại</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Nhập số điện thoại"
-                  value={editForm.phone}
-                  onChangeText={(text) => setEditForm({...editForm, phone: text})}
-                  keyboardType="phone-pad"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* City */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Thành phố</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Nhập thành phố"
-                  value={editForm.city}
-                  onChangeText={(text) => setEditForm({...editForm, city: text})}
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* Country */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Quốc gia</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Nhập quốc gia"
-                  value={editForm.country}
-                  onChangeText={(text) => setEditForm({...editForm, country: text})}
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* Group */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Nhóm người</Text>
-                <View style={{ borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-                  <Picker
-                    selectedValue={editForm.group}
-                    onValueChange={(val) => setEditForm({...editForm, group: val})}
-                  >
-                    <Picker.Item label="Bình thường" value="normal" />
-                    <Picker.Item label="Nhạy cảm" value="sensitive" />
-                  </Picker>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowEditModal(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalSaveButton, saving && styles.modalSaveButtonDisabled]}
-                onPress={handleSaveProfile}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <>
-                    <Feather name="check" size={18} color="#ffffff" />
-                    <Text style={styles.modalSaveButtonText}>Lưu</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        editForm={editForm}
+        setEditForm={setEditForm}
+        saving={saving}
+        onClose={closeEditModal}
+        onSave={handleSaveProfile}
+      />
     </View>
   );
 }
@@ -711,150 +405,4 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBody: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    gap: 12,
-  },
-
-  // Form Styles
-  formGroup: {
-    marginBottom: 20,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  formInput: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#0f172a',
-  },
-  genderRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  genderButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    gap: 8,
-  },
-  genderButtonActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#2563eb',
-  },
-  genderButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#64748b',
-  },
-  genderButtonTextActive: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-
-  // Modal Buttons
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCancelButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  modalSaveButton: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  modalSaveButtonDisabled: {
-    opacity: 0.6,
-  },
-  modalSaveButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
 });
