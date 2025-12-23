@@ -1,7 +1,9 @@
-import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useRef, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import IntroPagination from '../../components/intro/IntroPagination';
+import IntroSlide from '../../components/intro/IntroSlide';
+import { Feather } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
@@ -59,12 +61,10 @@ export default function IntroScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Skip Button */}
       <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
         <Text style={styles.skipText}>Bỏ qua</Text>
       </TouchableOpacity>
 
-      {/* Slides */}
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -74,30 +74,18 @@ export default function IntroScreen() {
         scrollEventThrottle={16}
       >
         {slides.map((slide) => (
-          <View key={slide.id} style={styles.slide}>
-            <View style={[styles.iconContainer, { backgroundColor: slide.color + '20' }]}>
-              <Feather name={slide.icon} size={80} color={slide.color} />
-            </View>
-            <Text style={styles.title}>{slide.title}</Text>
-            <Text style={styles.description}>{slide.description}</Text>
-          </View>
+          <IntroSlide
+            key={slide.id}
+            title={slide.title}
+            description={slide.description}
+            icon={slide.icon}
+            color={slide.color}
+          />
         ))}
       </ScrollView>
 
-      {/* Pagination Dots */}
-      <View style={styles.pagination}>
-        {slides.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.dot,
-              currentIndex === index && styles.dotActive,
-            ]}
-          />
-        ))}
-      </View>
+      <IntroPagination total={slides.length} currentIndex={currentIndex} />
 
-      {/* Next/Get Started Button */}
       <TouchableOpacity style={styles.button} onPress={handleNext}>
         <Text style={styles.buttonText}>
           {currentIndex === slides.length - 1 ? 'Bắt đầu' : 'Tiếp theo'}
@@ -105,7 +93,6 @@ export default function IntroScreen() {
         <Feather name="arrow-right" size={20} color="#fff" style={{ marginLeft: 8 }} />
       </TouchableOpacity>
 
-      {/* SmartAir Branding */}
       <View style={styles.branding}>
         <Text style={styles.brandText}>SmartAir</Text>
         <Text style={styles.brandSubtext}>Giải pháp theo dõi không khí thông minh</Text>
@@ -131,50 +118,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b',
     fontWeight: '600',
-  },
-  slide: {
-    width,
-    paddingHorizontal: 40,
-    paddingTop: 120,
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0f172a',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  description: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#cbd5e1',
-    marginHorizontal: 4,
-  },
-  dotActive: {
-    width: 24,
-    backgroundColor: '#3b82f6',
   },
   button: {
     flexDirection: 'row',
@@ -211,3 +154,5 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
 });
+
+

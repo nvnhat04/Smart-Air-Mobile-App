@@ -3,9 +3,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import DetailStationScreen from '../screens/DetailStationScreen';
-import IntroScreen from '../screens/IntroScreen';
-import LoginScreen from '../screens/LoginScreen';
-import RegisterScreen from '../screens/RegisterScreen';
+import IntroScreen from '../screens/auth/IntroScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
+import RegisterScreen from '../screens/auth/RegisterScreen';
 import RootTabs from './RootTabs';
 
 const Stack = createNativeStackNavigator();
