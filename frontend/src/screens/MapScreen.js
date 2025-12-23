@@ -20,6 +20,7 @@ import { StationDetailSheet, MapTopBar, MapLayerControls } from '../components/m
 import { useLocationTracking } from '../hooks/map/useLocationTracking';
 import useMapSearch from '../hooks/map/useMapSearch';
 import useAutoSaveUserLocation from '../hooks/map/useAutoSaveUserLocation';
+import useMapStations from '../hooks/map/useMapStations';
 import { BASE_URL } from '../services/api';
 import { fetchStationsWithLatestData } from '../services/cemApi';
 import { fetchPM25DataFromBackend, fetchWeatherData, reverseGeocode } from '../services/mapService';
@@ -84,8 +85,7 @@ export default function MapScreen() {
     clearSearch,
   } = useMapSearch();
   const [lastClickedPoint, setLastClickedPoint] = useState(null); // Lưu tọa độ điểm đã click
-  const [cemStations, setCemStations] = useState([]); // Dữ liệu thật từ CEM API
-  const [loadingStations, setLoadingStations] = useState(true); // Loading state cho stations
+  const { cemStations, loadingStations, stationDetailsById } = useMapStations(); // Station management
   const [webviewReady, setWebviewReady] = useState(false); // Track WebView ready state
 
   // Tự động lưu lịch sử vị trí GPS khi user xem chi tiết vị trí của mình
@@ -93,57 +93,6 @@ export default function MapScreen() {
   const [showHeatmap, setShowHeatmap] = useState(true); // Toggle heatmap
   const [showMarkers, setShowMarkers] = useState(true); // Toggle markers
   const navigation = useNavigation();
-
-  // Load dữ liệu trạm thật từ CEM API khi component mount
-  useEffect(() => {
-    console.log('🚀 MapScreen mounted - Starting to load stations...');
-    
-    const loadStations = async () => {
-      try {
-        setLoadingStations(true);
-        console.log('🔄 Loading stations from CEM API...');
-        const stations = await fetchStationsWithLatestData();
-        console.log(`✅ Loaded ${stations.length} stations from CEM`);
-        
-        // Debug: Log chi tiết stations
-        if (stations.length > 0) {
-          console.log('📊 First station sample:', {
-            id: stations[0].id,
-            name: stations[0].name,
-            lat: stations[0].lat,
-            lng: stations[0].lng,
-            aqi: stations[0].aqi,
-            baseAqi: stations[0].baseAqi,
-            pm25: stations[0].pm25,
-          });
-        } else {
-          console.log('⚠️ No stations returned from API');
-        }
-        
-        console.log('✅ setCemStations called with', stations.length, 'stations');
-        setCemStations(stations);
-        
-        // Force log để kiểm tra
-        setTimeout(() => {
-          console.log('🔍 After setCemStations - state should be updated');
-        }, 100);
-      } catch (error) {
-        console.error('❌ Error loading CEM stations:', error);
-        console.error('❌ Error stack:', error.stack);
-        Alert.alert(
-          'Lỗi tải dữ liệu',
-          'Không thể tải dữ liệu trạm từ CEM. Vui lòng thử lại sau.',
-          [{ text: 'OK' }]
-        );
-      } finally {
-        console.log('🏁 loadStations finally block - setLoadingStations(false)');
-        setLoadingStations(false);
-      }
-    };
-
-    console.log('📞 Calling loadStations()...');
-    loadStations();
-  }, []); // Chỉ chạy một lần khi mount
 
   // API functions đã được tách vào services/mapService.js:
   // - fetchPM25DataFromBackend
@@ -260,22 +209,6 @@ export default function MapScreen() {
       setLoadingPointData(false);
     }
   };
-
-  // Tạo stationDetailsById từ cemStations
-  const stationDetailsById = useMemo(() => {
-    const map = {};
-    cemStations.forEach(station => {
-      const aqi = station.aqi || station.baseAqi || 0;
-      map[station.id] = {
-        ...station,
-        aqi,
-        status: getAQICategory(aqi),
-        color: getAQIColor(aqi),
-        advice: getHealthAdvice(aqi),
-      };
-    });
-    return map;
-  }, [cemStations]);
 
   // Lấy thêm thông tin chi tiết (temp, humidity, advice, color, address...) giống AirGuardApp.jsx
   const selectedStationDetail = useMemo(() => {
