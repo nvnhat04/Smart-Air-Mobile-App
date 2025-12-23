@@ -1,8 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
 import { useRef, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import IntroPagination from '../../components/intro/IntroPagination';
-import IntroSlide from '../../components/intro/IntroSlide';
+import IntroPagination from '../../components/auth/IntroPagination';
+import IntroSlide from '../../components/auth/IntroSlide';
 import { Feather } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');

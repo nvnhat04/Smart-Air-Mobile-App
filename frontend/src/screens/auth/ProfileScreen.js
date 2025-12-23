@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ProfileEditModal from '../../components/profile/ProfileEditModal';
+import ProfileEditModal from '../../components/auth/ProfileEditModal';
 import useProfile from '../../hooks/auth/useProfile';
 
 export default function ProfileScreen() {

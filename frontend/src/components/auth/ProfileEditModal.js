@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   },
   modalCancelButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: 600,
     color: '#64748b',
   },
   modalSaveButton: {
