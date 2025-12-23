@@ -9,21 +9,27 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { config } from '../../config';
 import { AqiBar } from '../components/ui';
-import { StationDetailSheet, MapTopBar, MapLayerControls } from '../components/map';
+import {
+  StationDetailSheet,
+  MapTopBar,
+  MapLayerControls,
+  MapWebView,
+  MapSearchDropdown,
+  MapDayDropdown,
+} from '../components/map';
 import { useLocationTracking } from '../hooks/map/useLocationTracking';
 import useMapSearch from '../hooks/map/useMapSearch';
 import useAutoSaveUserLocation from '../hooks/map/useAutoSaveUserLocation';
 import useMapStations from '../hooks/map/useMapStations';
+import useMapInteractions from '../hooks/map/useMapInteractions';
 import { BASE_URL } from '../services/api';
-import { fetchStationsWithLatestData } from '../services/cemApi';
-import { fetchPM25DataFromBackend, fetchWeatherData, reverseGeocode } from '../services/mapService';
+import { fetchWeatherData } from '../services/mapService';
 import {
   createDayOptions,
   getAQIColor,
@@ -71,7 +77,6 @@ export default function MapScreen() {
   const [dayMenuOpen, setDayMenuOpen] = useState(false);
   const selectedDay = dayOptions[selectedDayIndex];
   const webviewRef = React.useRef(null);
-  const [locating, setLocating] = useState(false);
   const [selectedStation, setSelectedStation] = useState(null);
   const [loadingPointData, setLoadingPointData] = useState(false);
   
@@ -92,123 +97,26 @@ export default function MapScreen() {
   const { savedLocationRef } = useAutoSaveUserLocation(selectedStation, saveCurrentLocation);
   const [showHeatmap, setShowHeatmap] = useState(true); // Toggle heatmap
   const [showMarkers, setShowMarkers] = useState(true); // Toggle markers
+
+  // Map interactions (click, locate me, select search result, re-fetch on day change)
+  const {
+    locating,
+    handleMapClick,
+    handleLocateMe,
+    handleSelectSearchResult,
+  } = useMapInteractions({
+    selectedDay,
+    selectedStation,
+    lastClickedPoint,
+    setSelectedStation,
+    setLastClickedPoint,
+    setLoadingPointData,
+    clearSearch,
+    webviewRef,
+  });
+
   const navigation = useNavigation();
 
-  // API functions đã được tách vào services/mapService.js:
-  // - fetchPM25DataFromBackend
-  // - fetchWeatherData
-  // - reverseGeocode
-
-  // Handle map click to fetch data from APIs
-  const handleMapClick = async (lat, lon, pointId = 'custom-point') => {
-    try {
-      // Validate coordinates before making API calls
-      const validLat = parseFloat(lat);
-      const validLon = parseFloat(lon);
-      
-      if (isNaN(validLat) || isNaN(validLon)) {
-        console.warn('⚠️ Invalid coordinates:', { lat, lon });
-        Alert.alert('Lỗi', 'Tọa độ không hợp lệ');
-        return;
-      }
-      
-      if (validLat < -90 || validLat > 90 || validLon < -180 || validLon > 180) {
-        console.warn('⚠️ Coordinates out of range:', { lat: validLat, lon: validLon });
-        Alert.alert('Lỗi', 'Tọa độ nằm ngoài phạm vi cho phép');
-        return;
-      }
-      
-      setLoadingPointData(true);
-      
-      // Lưu tọa độ để có thể re-fetch khi đổi ngày (chỉ cho custom-point)
-      if (pointId === 'custom-point') {
-        setLastClickedPoint({ lat: validLat, lon: validLon });
-      }
-      
-      // Use Promise.allSettled instead of Promise.all to handle individual failures gracefully
-      const results = await Promise.allSettled([
-        fetchPM25DataFromBackend(validLat, validLon, selectedDay?.isoDate),
-        fetchWeatherData(validLat, validLon, selectedDay?.isoDate),
-        reverseGeocode(validLat, validLon),
-      ]);
-      
-      // Extract data from settled promises with fallback values
-      const pm25Data = results[0].status === 'fulfilled' ? results[0].value : null;
-      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0, precipitation: 0 };
-      const locationData = results[2].status === 'fulfilled' ? results[2].value : { 
-        name: 'Điểm được chọn', 
-        address: `${validLat.toFixed(4)}, ${validLon.toFixed(4)}`, 
-        district: '', 
-        city: '' 
-      };
-      
-      // Debug: Log fetched data
-      console.log('📊 handleMapClick - Fetched data:', {
-        pm25: pm25Data?.pm25,
-        aqi: pm25Data?.aqi,
-        temp: weatherData.temp,
-        humidity: weatherData.humidity,
-        precipitation: weatherData.precipitation,
-        selectedDate: selectedDay?.isoDate || 'today',
-        pointId: pointId
-      });
-      
-      // Log any failures for debugging
-      const apiNames = ['fetchPM25Data', 'fetchWeatherData', 'reverseGeocode'];
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.warn(`⚠️ ${apiNames[index]} failed:`, result.reason?.message || result.reason);
-        }
-      });
-
-      // Check if backend server is not available (but still show weather data if available)
-      if (!pm25Data) {
-        Alert.alert(
-          '⚠️ Không có dữ liệu PM2.5',
-          Platform.OS === 'android' 
-            ? `Không thể kết nối với server backend.\n\nĐã thử các URL:\n• http://10.0.2.2:8000\n• http://localhost:8000\n• http://127.0.0.1:8000\n\n✅ Giải pháp:\n1. Mở terminal mới\n2. cd server\n3. python run.py\n4. Đảm bảo server bind 0.0.0.0:8000`
-            : `Không thể kết nối với server backend.\n\n✅ Giải pháp:\n1. Mở terminal: cd server\n2. Chạy: python run.py\n3. Kiểm tra: http://localhost:8000/health`,
-          [{ text: 'Đã hiểu' }]
-        );
-      }
-
-      // Construct station-like object (KHÔNG lưu vị trí này vào location history)
-      const pointData = {
-        id: pointId, // Sử dụng pointId được truyền vào (mặc định 'custom-point')
-        lat: validLat,
-        lon: validLon, // Đổi từ lng sang lon để consistent với DetailStationScreen
-        lng: validLon, // Giữ lng để backward compatible
-        name: locationData.name,
-        address: locationData.address,
-        district: locationData.district,
-        city: locationData.city,
-        aqi: pm25Data?.aqi || null,
-        pm25: pm25Data?.pm25 || null,
-        status: pm25Data?.aqi ? getAQICategory(pm25Data.aqi) : 'Không có dữ liệu',
-        color: pm25Data?.aqi ? getAQIColor(pm25Data.aqi) : '#9ca3af',
-        temp: weatherData.temp,
-        humidity: weatherData.humidity,
-        windSpeed: weatherData.windSpeed,
-        weatherCode: weatherData.weatherCode,
-        precipitation: weatherData.precipitation,
-        advice: getHealthAdvice(pm25Data?.aqi),
-        category: pm25Data?.category || null,
-      };
-
-      console.log('📍 pointData created for popup:', {
-        name: pointData.name,
-        temp: pointData.temp,
-        humidity: pointData.humidity,
-        aqi: pointData.aqi
-      });
-
-      setSelectedStation(pointData);
-    } catch (error) {
-      console.error('Error handling map click:', error);
-    } finally {
-      setLoadingPointData(false);
-    }
-  };
 
   // Lấy thêm thông tin chi tiết (temp, humidity, advice, color, address...) giống AirGuardApp.jsx
   const selectedStationDetail = useMemo(() => {
@@ -243,148 +151,6 @@ export default function MapScreen() {
     };
   }, [selectedStation, stationDetailsById]);
 
-
-  // Re-fetch PM2.5 data khi đổi ngày (nếu đang xem điểm tùy ý hoặc vị trí GPS)
-  useEffect(() => {
-    if (selectedStation?.id === 'custom-point' && lastClickedPoint) {
-      // Re-fetch dữ liệu với ngày mới cho điểm tùy ý
-      handleMapClick(lastClickedPoint.lat, lastClickedPoint.lon, 'custom-point');
-    } else if (selectedStation?.id === 'user-gps-location' && selectedStation?.lat && selectedStation?.lon) {
-      // Re-fetch dữ liệu với ngày mới cho vị trí GPS (giữ nguyên id)
-      handleMapClick(selectedStation.lat, selectedStation.lon, 'user-gps-location');
-    }
-  }, [selectedDay]); // Đảm bảo dependencies đầy đủ
-
-  const handleLocateMe = async () => {
-    try {
-      setLocating(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Quyền truy cập vị trí',
-          'Ứng dụng cần quyền truy cập vị trí để hiển thị vị trí của bạn trên bản đồ.',
-          [{ text: 'OK' }]
-        );
-        setLocating(false);
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const { latitude, longitude } = pos.coords;
-      
-      // Validate GPS coordinates
-      const validLat = parseFloat(latitude);
-      const validLon = parseFloat(longitude);
-      
-      if (isNaN(validLat) || isNaN(validLon)) {
-        console.warn('⚠️ Invalid GPS coordinates:', { latitude, longitude });
-        Alert.alert('Lỗi', 'Tọa độ GPS không hợp lệ');
-        setLocating(false);
-        return;
-      }
-      
-      if (validLat < -90 || validLat > 90 || validLon < -180 || validLon > 180) {
-        console.warn('⚠️ GPS coordinates out of range:', { lat: validLat, lon: validLon });
-        Alert.alert('Lỗi', 'Tọa độ GPS nằm ngoài phạm vi cho phép');
-        setLocating(false);
-        return;
-      }
-      
-      // Di chuyển bản đồ đến vị trí GPS
-      if (webviewRef.current) {
-        const js = `
-          window.__setExternalLocation && window.__setExternalLocation(${validLat}, ${validLon});
-          true;
-        `;
-        webviewRef.current.injectJavaScript(js);
-      }
-      
-      // Fetch dữ liệu PM2.5 và hiển thị popup cho vị trí GPS của user
-      setLoadingPointData(true);
-      
-      // Use Promise.allSettled to handle individual failures gracefully
-      const results = await Promise.allSettled([
-        fetchPM25DataFromBackend(validLat, validLon, selectedDay?.isoDate),
-        fetchWeatherData(validLat, validLon, selectedDay?.isoDate),
-        reverseGeocode(validLat, validLon),
-      ]);
-      
-      // Extract data from settled promises with fallback values
-      const pm25Data = results[0].status === 'fulfilled' ? results[0].value : null;
-      const weatherData = results[1].status === 'fulfilled' ? results[1].value : { temp: 0, humidity: 0, windSpeed: 0, weatherCode: 0, precipitation: 0 };
-      const locationData = results[2].status === 'fulfilled' ? results[2].value : { 
-        name: 'Vị trí của bạn', 
-        address: `${validLat.toFixed(4)}, ${validLon.toFixed(4)}`, 
-        district: '', 
-        city: '' 
-      };
-      
-      // Log any failures for debugging
-      const apiNames = ['fetchPM25DataFromBackend', 'fetchWeatherData', 'reverseGeocode'];
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.warn(`⚠️ GPS location ${apiNames[index]} failed:`, result.reason?.message || result.reason);
-        }
-      });
-      
-      // Construct user GPS location object
-      const userGpsLocation = {
-        id: 'user-gps-location', // ID đặc biệt để nhận diện vị trí GPS của user
-        lat: validLat,
-        lon: validLon,
-        lng: validLon,
-        name: locationData.name,
-        address: locationData.address,
-        district: locationData.district,
-        city: locationData.city,
-        aqi: pm25Data?.aqi || null,
-        pm25: pm25Data?.pm25 || null,
-        status: pm25Data?.aqi ? getAQICategory(pm25Data.aqi) : 'Không có dữ liệu',
-        color: pm25Data?.aqi ? getAQIColor(pm25Data.aqi) : '#9ca3af',
-        temp: weatherData.temp,
-        humidity: weatherData.humidity,
-        windSpeed: weatherData.windSpeed,
-        weatherCode: weatherData.weatherCode,
-        precipitation: weatherData.precipitation,
-        advice: getHealthAdvice(pm25Data?.aqi),
-        category: pm25Data?.category || null,
-      };
-      
-      // Hiển thị popup thông tin vị trí GPS
-      setSelectedStation(userGpsLocation);
-      setLoadingPointData(false);
-      
-    } catch (e) {
-      console.warn('GPS error', e);
-      Alert.alert(
-        'Lỗi GPS',
-        'Không thể lấy vị trí hiện tại. Vui lòng kiểm tra GPS và thử lại.',
-        [{ text: 'OK' }]
-      );
-      setLoadingPointData(false);
-    } finally {
-      setLocating(false);
-    }
-  };
-
-
-  const handleSelectSearchResult = async (item) => {
-    // Clear search UI completely
-    clearSearch();
-
-    // Center map tới địa điểm OSM
-    if (webviewRef.current && item.lat && item.lng) {
-      const js = `
-        window.__setExternalLocation && window.__setExternalLocation(${item.lat}, ${item.lng});
-        true;
-      `;
-      webviewRef.current.injectJavaScript(js);
-    }
-
-    // Fetch dữ liệu và hiển thị popup detail (giống như handleMapClick)
-    await handleMapClick(item.lat, item.lng);
-  };
 
   // Inject stations vào WebView sau khi cemStations được load và WebView ready
   useEffect(() => {
@@ -450,21 +216,22 @@ export default function MapScreen() {
   // Generate HTML with BASE_URL
   const leafletHTML = useMemo(() => generateLeafletHTML(BASE_URL), []);
 
+  const handleSelectDay = (idx, opt) => {
+    setSelectedDayIndex(idx);
+    if (webviewRef.current && opt.isoDate) {
+      const js = `window.__setWmsDate && window.__setWmsDate('${opt.isoDate}'); true;`;
+      webviewRef.current.injectJavaScript(js);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* WebView hiển thị Leaflet map (WebView thuần, giống bản đầu) */}
-      <WebView
+      {/* WebView hiển thị Leaflet map */}
+      <MapWebView
         ref={webviewRef}
-        originWhitelist={['*']}
-        source={{ html: leafletHTML }}
+        leafletHTML={leafletHTML}
         style={styles.webview}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        allowsFullscreenVideo={false}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        mixedContentMode="always"
-        onLoad={() => {
+        onReady={() => {
           console.log('✅ WebView loaded, map ready');
           setWebviewReady(true);
         }}
@@ -474,7 +241,7 @@ export default function MapScreen() {
             if (data.type === 'station_click') {
               // Get full station data from cemStations by id
               const stationId = data.payload.id;
-              const fullStation = cemStations.find(s => s.id === stationId);
+              const fullStation = cemStations.find((s) => s.id === stationId);
 
               // Hide any external GPS/custom marker when a station is selected
               try {
@@ -490,20 +257,22 @@ export default function MapScreen() {
                 // The AQI from cemStations is already correct from the API
                 // But fetch weather data (temp, humidity, windSpeed, precipitation) from Open-Meteo
                 const lon = fullStation.lon || fullStation.lng;
-                fetchWeatherData(fullStation.lat, lon, selectedDay?.isoDate).then(weatherData => {
-                  setSelectedStation({
-                    ...fullStation,
-                    temp: weatherData.temp,
-                    humidity: weatherData.humidity,
-                    windSpeed: weatherData.windSpeed,
-                    precipitation: weatherData.precipitation,
-                    weatherCode: weatherData.weatherCode,
+                fetchWeatherData(fullStation.lat, lon, selectedDay?.isoDate)
+                  .then((weatherData) => {
+                    setSelectedStation({
+                      ...fullStation,
+                      temp: weatherData.temp,
+                      humidity: weatherData.humidity,
+                      windSpeed: weatherData.windSpeed,
+                      precipitation: weatherData.precipitation,
+                      weatherCode: weatherData.weatherCode,
+                    });
+                  })
+                  .catch((err) => {
+                    console.error('Error fetching weather for station:', err);
+                    // Still show station without weather data
+                    setSelectedStation(fullStation);
                   });
-                }).catch(err => {
-                  console.error('Error fetching weather for station:', err);
-                  // Still show station without weather data
-                  setSelectedStation(fullStation);
-                });
               } else {
                 // Fallback to basic data from WebView
                 setSelectedStation(data.payload);
@@ -575,99 +344,21 @@ export default function MapScreen() {
       </View> */}
 
       {/* Dropdown kết quả tìm kiếm OSM */}
-      {searchQuery.trim().length > 0 && (searchResults.length > 0 || searchLoading || searchError) && (
-        <View style={styles.searchDropdown}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.searchDropdownContent}
-          >
-            {searchResults.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.searchResultRow}
-                onPress={() => handleSelectSearchResult(item)}
-              >
-                <Feather
-                  name="map-pin"
-                  size={14}
-                  color="#2563eb"
-                  style={{ marginRight: 8, marginTop: 2 }}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.searchResultName}>{item.name}</Text>
-                  {!!item.address && (
-                    <Text style={styles.searchResultAddress}>{item.address}</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-
-            {searchLoading && (
-              <Text style={styles.searchStatusText}>Đang tìm kiếm địa điểm...</Text>
-            )}
-
-            {!searchLoading && !searchResults.length && !searchError && (
-              <Text style={styles.searchStatusText}>
-                Nhập ít nhất 3 ký tự để tìm kiếm
-              </Text>
-            )}
-
-            {searchError && (
-              <Text style={[styles.searchStatusText, { color: '#ef4444' }]}>
-                {searchError}
-              </Text>
-            )}
-          </ScrollView>
-        </View>
-      )}
+      <MapSearchDropdown
+        searchQuery={searchQuery}
+        searchResults={searchResults}
+        searchLoading={searchLoading}
+        searchError={searchError}
+        onSelectResult={handleSelectSearchResult}
+      />
 
       {/* Thanh ngày dạng popup phía dưới, scroll ngang giống SmartAir-UI */}
-      {dayMenuOpen && (
-        <View style={styles.dayDropdown}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dayScrollContent}
-          >
-            {dayOptions.map((opt, idx) => (
-              <TouchableOpacity
-                key={`${opt.label}-${opt.dateStr}`}
-                style={[
-                  styles.dayChip,
-                  selectedDayIndex === idx && styles.dayChipActive,
-                ]}
-                onPress={() => {
-                  setSelectedDayIndex(idx);
-                  // setDayMenuOpen(true);
-                  if (webviewRef.current && opt.isoDate) {
-                    const js = `window.__setWmsDate && window.__setWmsDate('${opt.isoDate}'); true;`;
-                    webviewRef.current.injectJavaScript(js);
-                  }
-                }}
-              >
-                <View>
-                  <Text
-                    style={[
-                      styles.dayChipText,
-                      selectedDayIndex === idx && styles.dayChipTextActive,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.dayChipDate,
-                      selectedDayIndex === idx && styles.dayChipDateActive,
-                    ]}
-                  >
-                    {opt.dateStr}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      <MapDayDropdown
+        visible={dayMenuOpen}
+        dayOptions={dayOptions}
+        selectedDayIndex={selectedDayIndex}
+        onSelectDay={handleSelectDay}
+      />
 
       {/* Bottom sheet hiển thị chi tiết station – giống popup trong SmartAir-UI */}
       <StationDetailSheet
