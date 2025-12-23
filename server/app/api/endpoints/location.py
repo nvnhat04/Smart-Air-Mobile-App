@@ -241,18 +241,22 @@ async def get_location_stats(
     db = get_database()
     user_id = current_user["user_id"]
     
-    # Calculate date range
+    # Calculate date range: use VN-local midnight (00:00) of the day `days` ago
     vn_tz = timezone(timedelta(hours=7))  # UTC+7 Vietnam timezone
-    cutoff_date = datetime.now(vn_tz) - timedelta(days=days)
-    print('[get_location_stats] cutoff_date:', cutoff_date)
-    # Get all records for the period
+    now_local_for_cutoff = datetime.now(vn_tz)
+    today_local_for_cutoff = now_local_for_cutoff.date()
+    start_local_date = today_local_for_cutoff - timedelta(days=days)
+    cutoff_local = datetime(start_local_date.year, start_local_date.month, start_local_date.day, 0, 0, 0, tzinfo=vn_tz)
+    cutoff_utc = cutoff_local.astimezone(timezone.utc)
+    print('[get_location_stats] cutoff_local:', cutoff_local, 'cutoff_utc:', cutoff_utc)
+    # Get all records for the period (DB stores timestamps in UTC)
     cursor = db.locations.find({
         "user_id": user_id,
-        "timestamp": {"$gte": cutoff_date}
+        "timestamp": {"$gte": cutoff_utc}
     })
-    
+   
     locations = await cursor.to_list(length=10000)
-    
+   
     if not locations:
         return LocationHistoryStats(
             total_records=0,
@@ -268,14 +272,11 @@ async def get_location_stats(
             daily_avg_aqi=[]
         )
     
-    # Calculate statistics
-    total_records = len(locations)
-
-    # Date range
-    timestamps = [loc["timestamp"] for loc in locations]
-    start_date = min(timestamps).strftime("%Y-%m-%d")
+    # We'll build a list of valid records (exclude today's partial data) and compute stats from that
+    valid_records = []
     # Set end_date to yesterday (VN local) to avoid including today's partial data
-    now_local = datetime.now(timezone(timedelta(hours=7)))
+    now_local = datetime.now(vn_tz)
+    today_local = now_local.date()
     yesterday_local = (now_local - timedelta(days=1)).date()
     end_date = yesterday_local.strftime("%Y-%m-%d")
 
@@ -288,16 +289,40 @@ async def get_location_stats(
     aqi_values = []
     pm25_values = []
     for loc in locations:
+        ts = loc.get("timestamp")
+        if ts is None:
+            continue
+        # make tz-aware if naive: interpret naive timestamps as VN-local
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=vn_tz)
+        # convert to VN local for grouping and for excluding today
+        ts_local = ts.astimezone(vn_tz)
+        if ts_local.date() == today_local:
+            # skip today's partial data
+            continue
+        # record is valid for stats
+        valid_records.append(loc)
+
         if loc.get("aqi") is not None and loc.get("aqi") > 0:
-            date_str = loc["timestamp"].strftime("%Y-%m-%d")
+            date_str = ts_local.strftime("%Y-%m-%d")
             daily_aqi_map[date_str].append(loc["aqi"])
             aqi_values.append(loc["aqi"])  # keep flat list for max/min
 
         if loc.get("pm25") is not None and loc.get("pm25") > 0:
-            date_str = loc["timestamp"].strftime("%Y-%m-%d")
+            date_str = ts_local.strftime("%Y-%m-%d")
             daily_pm25_map[date_str].append(loc["pm25"])
             pm25_values.append(loc["pm25"])  # keep flat list for max/min
-
+    print('[get_location_stats] daily_aqi_map:', daily_aqi_map)
+    # total_records should count valid_records (we excluded today's records above)
+    total_records = len(valid_records)
+    if valid_records:
+        valid_timestamps = [r["timestamp"] for r in valid_records if r.get("timestamp") is not None]
+        min_ts = min(valid_timestamps)
+        if min_ts.tzinfo is None:
+            min_ts = min_ts.replace(tzinfo=vn_tz)
+        start_date = min_ts.astimezone(vn_tz).strftime("%Y-%m-%d")
+    else:
+        start_date = None
     # Average across days (only days that have values)
     daily_aqi_avgs = [sum(v) / len(v) for v in daily_aqi_map.values()] if daily_aqi_map else []
     avg_aqi = sum(daily_aqi_avgs) / len(daily_aqi_avgs) if daily_aqi_avgs else None
