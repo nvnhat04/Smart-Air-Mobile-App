@@ -16,7 +16,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { config } from '../../config';
 import { AqiBar } from '../components/ui';
-import { StationDetailSheet } from '../components/map';
+import { StationDetailSheet, MapTopBar, MapLayerControls } from '../components/map';
 import { useLocationTracking } from '../hooks/map/useLocationTracking';
 import useMapSearch from '../hooks/map/useMapSearch';
 import useAutoSaveUserLocation from '../hooks/map/useAutoSaveUserLocation';
@@ -591,85 +591,24 @@ export default function MapScreen() {
       />
 
       {/* Thanh control trên cùng: chọn ngày + GPS */}
-      <View style={styles.topBar}>
-        {/* Thanh search giống SmartAir-UI */}
-        <View style={styles.searchWrapper}>
-          <Feather name="search" size={16} color="#9ca3af" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm quận, phường, xã..."
-            placeholderTextColor="#9ca3af"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-
-        {/* Nút chọn ngày */}
-        <TouchableOpacity
-          style={styles.dayButton}
-          onPress={() => setDayMenuOpen((prev) => !prev)}
-        >
-          <Text style={styles.dayButtonText}>
-            {selectedDay ? `${selectedDay.label} - ${selectedDay.dateStr}` : 'Chọn ngày'}
-          </Text>
-          <Feather
-            name={dayMenuOpen ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color="#9ca3af"
-          />
-        </TouchableOpacity>
-
-        {/* Nút GPS */}
-        <TouchableOpacity
-          style={styles.gpsButton}
-          onPress={handleLocateMe}
-          disabled={locating}
-        >
-          {locating ? (
-            <View style={styles.gpsSpinner} />
-          ) : (
-            <Feather name="crosshair" size={16} color="#ffffff" />
-          )}
-        </TouchableOpacity>
-      </View>
+      <MapTopBar
+        searchQuery={searchQuery}
+        onChangeSearch={setSearchQuery}
+        locating={locating}
+        onPressLocate={handleLocateMe}
+        selectedDay={selectedDay}
+        dayMenuOpen={dayMenuOpen}
+        onToggleDayMenu={() => setDayMenuOpen((prev) => !prev)}
+      />
 
       {/* Layer Controls - Toggle Heatmap & Markers */}
-      <View style={styles.layerControls}>
-        <TouchableOpacity
-          style={[styles.layerButton, !showHeatmap && styles.layerButtonInactive]}
-          onPress={() => setShowHeatmap(!showHeatmap)}
-        >
-          <Feather name="map" size={16} color={showHeatmap ? "#2563eb" : "#9ca3af"} />
-          <Text style={[styles.layerButtonText, !showHeatmap && styles.layerButtonTextInactive]}>
-            Heatmap
-          </Text>
-        </TouchableOpacity>
-       <View style={styles.separator} />
-        <TouchableOpacity
-          style={[
-            styles.layerButton,
-            (!showMarkers || selectedDayIndex !== 0) && styles.layerButtonInactive
-          ]}
-          onPress={() => {
-            if (selectedDayIndex === 0) {
-              setShowMarkers(!showMarkers);
-            }
-          }}
-          disabled={selectedDayIndex !== 0}
-        >
-          <Feather 
-            name="map-pin" 
-            size={16} 
-            color={(showMarkers && selectedDayIndex === 0) ? "#2563eb" : "#9ca3af"} 
-          />
-          <Text style={[
-            styles.layerButtonText,
-            (!showMarkers || selectedDayIndex !== 0) && styles.layerButtonTextInactive
-          ]}>
-            Trạm
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <MapLayerControls
+        showHeatmap={showHeatmap}
+        onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
+        showMarkers={showMarkers}
+        onToggleMarkers={() => setShowMarkers(!showMarkers)}
+        selectedDayIndex={selectedDayIndex}
+      />
 
       {/* Zoom controls */}
       {/* <View style={styles.zoomControls}>
@@ -856,41 +795,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
   },
-  topBar: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 48,
-    left: 12,
-    right: 12,
-    zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  searchIcon: {
-    marginRight: 6,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#111827',
-    paddingVertical: 0,
-  },
   searchDropdown: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 100 : 92,
@@ -933,74 +837,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     textAlign: 'center',
-  },
-  gpsButton: {
-    marginLeft: 0,
-    width: CONTROL_HEIGHT,
-    height: CONTROL_HEIGHT,
-    borderRadius: 999,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  gpsSpinner: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-    transform: [{ rotate: '0deg' }],
-  },
-  separator: {
-  width: 2,
-  height: '100%',   // hoặc 100% nếu muốn đường dài
-  backgroundColor: '#e1dbdbff', // màu xám nhạt
-},
-  layerControls: {
-    position: 'absolute',
-    width: '50%',
-    left: '24.5%',  
-    right: '33.5%',
-    bottom: 60,
-    zIndex: 10,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-    overflow: 'hidden',
-    flexDirection: 'row',
-  },
-  layerButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#ffffff',
-    minWidth: 100,
-  },
-  layerButtonInactive: {
-    opacity: 0.5,
-  },
-  layerButtonText: {
-    fontSize: 13,
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-  layerButtonTextInactive: {
-    color: '#9ca3af',
   },
   zoomControls: {
     position: 'absolute',
