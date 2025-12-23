@@ -17,6 +17,7 @@ import { WebView } from 'react-native-webview';
 import { config } from '../../config';
 import { AqiBar } from '../components/ui';
 import { useLocationTracking } from '../hooks/map/useLocationTracking';
+import useMapSearch from '../hooks/map/useMapSearch';
 import { BASE_URL } from '../services/api';
 import { fetchStationsWithLatestData } from '../services/cemApi';
 import { fetchPM25DataFromBackend, fetchWeatherData, reverseGeocode } from '../services/mapService';
@@ -28,7 +29,6 @@ import {
 import { generateLeafletHTML } from '../utils/mapHtmlUtils';
 import { getAQICategory } from '../utils/aqiUtils';
 const CONTROL_HEIGHT = 40;
-const NOMINATIM_ENDPOINT = config.NOMINATIM_ENDPOINT + '/search';
 
 export default function MapScreen() {
   const { saveCurrentLocation } = useLocationTracking(true); // Enable auto-tracking
@@ -71,11 +71,17 @@ export default function MapScreen() {
   const [locating, setLocating] = useState(false);
   const [selectedStation, setSelectedStation] = useState(null);
   const savedLocationRef = React.useRef(null); // Track đã save location chưa
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState(null);
   const [loadingPointData, setLoadingPointData] = useState(false);
+  
+  // Search logic từ hook
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    searchLoading,
+    searchError,
+    clearSearch,
+  } = useMapSearch();
   const [lastClickedPoint, setLastClickedPoint] = useState(null); // Lưu tọa độ điểm đã click
   const [cemStations, setCemStations] = useState([]); // Dữ liệu thật từ CEM API
   const [loadingStations, setLoadingStations] = useState(true); // Loading state cho stations
@@ -462,87 +468,10 @@ export default function MapScreen() {
     }
   };
 
-  // Tìm kiếm địa điểm qua OpenStreetMap Nominatim (giống SmartAir-UI, bản rút gọn)
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-
-    const runSearch = async () => {
-      const q = searchQuery.trim();
-      if (q.length < 3) {
-        setSearchResults([]);
-        setSearchError(null);
-        return;
-      }
-
-      try {
-        setSearchLoading(true);
-        setSearchError(null);
-
-        const params = new URLSearchParams({
-          format: 'json',
-          addressdetails: '1',
-          polygon_geojson: '0',
-          limit: '5',
-          countrycodes: 'vn',
-          dedupe: '1',
-          q,
-        });
-
-        const res = await fetch(`${NOMINATIM_ENDPOINT}?${params.toString()}`, {
-          headers: {
-            'Accept-Language': 'vi',
-            'User-Agent': 'SmartAir-Mobile/1.0',
-          },
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          throw new Error('Search failed');
-        }
-
-        const data = await res.json();
-        if (!active) return;
-
-        const mapped = data.map((item) => {
-          const city = item.address?.city || item.address?.town || item.address?.village || '';
-          const district = item.address?.city_district || item.address?.district || '';
-          const state = item.address?.state || '';
-          const formatted = [district, city, state].filter(Boolean).join(', ');
-
-          return {
-            id: `osm-${item.place_id}`,
-            name: item.display_name?.split(',')[0] || item.display_name,
-            address: formatted || item.display_name,
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon),
-          };
-        });
-
-        setSearchResults(mapped);
-      } catch (e) {
-        if (e.name !== 'AbortError') {
-          setSearchError('Không tìm thấy địa điểm phù hợp');
-        }
-      } finally {
-        if (active) setSearchLoading(false);
-      }
-    };
-
-    const debounce = setTimeout(runSearch, 450);
-
-    return () => {
-      active = false;
-      controller.abort();
-      clearTimeout(debounce);
-    };
-  }, [searchQuery]);
 
   const handleSelectSearchResult = async (item) => {
     // Clear search UI completely
-    setSearchQuery('');
-    setSearchResults([]);
-    setSearchError(null);
+    clearSearch();
 
     // Center map tới địa điểm OSM
     if (webviewRef.current && item.lat && item.lng) {
