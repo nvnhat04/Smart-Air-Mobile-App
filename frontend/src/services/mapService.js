@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import api, { BASE_URL } from './api';
-import { config } from '../config';
+import { config } from '../../config';
 
 const OPENMETEO_API_URL = config.OPENMETEO_API_URL;
 

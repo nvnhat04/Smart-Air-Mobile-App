@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { searchLocation } from '../../services/mapService';
-import { config } from '../../config';
+import { config } from '../../../config';
 
 const NOMINATIM_ENDPOINT = config.NOMINATIM_ENDPOINT + '/search';
 
