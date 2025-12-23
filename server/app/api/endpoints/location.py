@@ -279,15 +279,34 @@ async def get_location_stats(
     yesterday_local = (now_local - timedelta(days=1)).date()
     end_date = yesterday_local.strftime("%Y-%m-%d")
 
-    # AQI statistics - filter out null and 0 values
-    aqi_values = [loc["aqi"] for loc in locations if loc.get("aqi") is not None and loc.get("aqi") > 0]
-    avg_aqi = sum(aqi_values) / len(aqi_values) if aqi_values else None
+    # AQI statistics - compute per-day averages then average across days
+    from collections import defaultdict
+
+    # Group AQI and PM2.5 values by local date string
+    daily_aqi_map = defaultdict(list)
+    daily_pm25_map = defaultdict(list)
+    aqi_values = []
+    pm25_values = []
+    for loc in locations:
+        if loc.get("aqi") is not None and loc.get("aqi") > 0:
+            date_str = loc["timestamp"].strftime("%Y-%m-%d")
+            daily_aqi_map[date_str].append(loc["aqi"])
+            aqi_values.append(loc["aqi"])  # keep flat list for max/min
+
+        if loc.get("pm25") is not None and loc.get("pm25") > 0:
+            date_str = loc["timestamp"].strftime("%Y-%m-%d")
+            daily_pm25_map[date_str].append(loc["pm25"])
+            pm25_values.append(loc["pm25"])  # keep flat list for max/min
+
+    # Average across days (only days that have values)
+    daily_aqi_avgs = [sum(v) / len(v) for v in daily_aqi_map.values()] if daily_aqi_map else []
+    avg_aqi = sum(daily_aqi_avgs) / len(daily_aqi_avgs) if daily_aqi_avgs else None
     max_aqi = max(aqi_values) if aqi_values else None
     min_aqi = min(aqi_values) if aqi_values else None
 
-    # PM2.5 statistics - filter out null and 0 values
-    pm25_values = [loc["pm25"] for loc in locations if loc.get("pm25") is not None and loc.get("pm25") > 0]
-    avg_pm25 = sum(pm25_values) / len(pm25_values) if pm25_values else None
+    # PM2.5: average across days
+    daily_pm25_avgs = [sum(v) / len(v) for v in daily_pm25_map.values()] if daily_pm25_map else []
+    avg_pm25 = sum(daily_pm25_avgs) / len(daily_pm25_avgs) if daily_pm25_avgs else None
     max_pm25 = max(pm25_values) if pm25_values else None
     min_pm25 = min(pm25_values) if pm25_values else None
    
@@ -304,19 +323,12 @@ async def get_location_stats(
 
     # Tính daily_avg_aqi: mảng các dict {date, avg_aqi}, chỉ lấy từ ngày -7 đến -1 (không lấy hôm nay)
     import datetime as dt
-    from collections import defaultdict
-    daily_aqi = defaultdict(list)
-    for loc in locations:
-        if loc.get("aqi") is not None and loc.get("aqi") > 0:
-            date_str = loc["timestamp"].strftime("%Y-%m-%d")
-            daily_aqi[date_str].append(loc["aqi"])
-
     today = dt.datetime.now(timezone(timedelta(hours=7))).date()
     # Lấy các ngày từ -7 đến -1 (không lấy hôm nay)
     valid_dates = [(today - dt.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
     daily_avg_aqi = [
-        {"date": date, "avg_aqi": round(sum(daily_aqi[date])/len(daily_aqi[date]), 1)}
-        for date in sorted(daily_aqi.keys())
+        {"date": date, "avg_aqi": round(sum(daily_aqi_map[date]) / len(daily_aqi_map[date]), 1)}
+        for date in sorted(daily_aqi_map.keys())
         if date in valid_dates
     ]
 
@@ -324,10 +336,10 @@ async def get_location_stats(
     return LocationHistoryStats(
         total_records=total_records,
         date_range={"start": start_date, "end": end_date},
-        avg_aqi=round(avg_aqi, 1) if avg_aqi else None,
+        avg_aqi=round(avg_aqi, 1) if avg_aqi is not None else None,
         max_aqi=max_aqi,
         min_aqi=min_aqi,
-        avg_pm25=round(avg_pm25, 1) if avg_pm25 else None,
+        avg_pm25=round(avg_pm25, 1) if avg_pm25 is not None else None,
         max_pm25=round(max_pm25, 1) if max_pm25 else None,
         min_pm25=round(min_pm25, 1) if min_pm25 else None,
         most_visited_location=most_visited,

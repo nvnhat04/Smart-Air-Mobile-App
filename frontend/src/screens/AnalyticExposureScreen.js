@@ -125,7 +125,7 @@ export default function AnalyticExposureScreen() {
         const processed = await processHistory(historyData, false, userLocation);
         setAnalyticsData(processed);
         // console.log('[AnalyticExposureScreen] Processed analytics data:', processed.length, 'days');
-        // console.log('[AnalyticExposureScreen] Sample data:', processed.slice(0, 3));
+      //   console.log('[AnalyticExposureScreen] Sample data:', processed.slice(0, 3));
       }
       setOverviewLoaded(true);
     } catch (error) {
@@ -553,7 +553,6 @@ export default function AnalyticExposureScreen() {
   // Use selected statsPeriod when estimating cigarette-equivalent exposure for the future window
   const cigFuture = locationStats ? (Number(futurePm25Avg) * (Number(statsPeriod) || 7) / 22).toFixed(1) : '0.0';
 
-  const maxAqi = Math.max(...analyticsData.map((d) => d.aqi * exposureMultiplier), 10);
 
   const radiusOptions = [20, 50, 70, 100, 120, 150, 200];
 
@@ -926,27 +925,26 @@ export default function AnalyticExposureScreen() {
             )}
           </View>
           <View style={styles.selectedAqiBox}>
-            {selectedData.type === 'past' && topLocationsByDay && Object.keys(topLocationsByDay).length > 0 ? (() => {
-              // selectedData.date dạng 'dd-mm' hoặc 'dd/mm', dateKey dạng 'yyyy-mm-dd'
-              const [selDay, selMonth] = selectedData.date.split(/[-\/]/);
-              const dateKey = Object.keys(topLocationsByDay).find(key => {
-                const [year, month, day] = key.split('-');
-                return day === selDay && month === selMonth;
+            {selectedData.type === 'past' ? (() => {
+              // Use the day-average AQI if available (from analyticsData or dayStats)
+              const rawAqi = (selectedData && selectedData.aqi != null)
+                ? selectedData.aqi
+                : (dayStats && dayStats.avg_aqi != null ? dayStats.avg_aqi : null);
 
-              });
-              const locs = dateKey ? topLocationsByDay[dateKey] : [];
-              const topLoc = locs && locs.length > 0 ? locs[0] : null;
-              if (!topLoc) return (
-                <>
-                  <Text style={styles.selectedAqiValue}>--</Text>
-                  <Text style={styles.selectedAqiLabel}>AQI TB</Text>
-                </>
-              );
-              const avgAqi = Math.round((topLoc.avgAqi || 0) * exposureMultiplier);
+              if (rawAqi == null) {
+                return (
+                  <>
+                    <Text style={styles.selectedAqiValue}>--</Text>
+                    <Text style={styles.selectedAqiLabel}>AQI VN TB</Text>
+                  </>
+                );
+              }
+
+              const avgAqi = Math.round(rawAqi * exposureMultiplier);
               return (
                 <>
                   <Text style={[styles.selectedAqiValue, { color: getAQIColor(avgAqi) }]}>{avgAqi}</Text>
-                  <Text style={styles.selectedAqiLabel}>AQI TB</Text>
+                  <Text style={styles.selectedAqiLabel}>AQI VN TB</Text>
                 </>
               );
             })() : (
