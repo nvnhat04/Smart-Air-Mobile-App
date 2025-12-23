@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useLocationTracking } from '../hooks/useLocationTracking';
+import { useLocationTracking } from '../hooks/map/useLocationTracking';
 import api from '../services/api';
 import {
   getAQIColor,

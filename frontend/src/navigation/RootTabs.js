@@ -6,7 +6,7 @@ import NewsScreen from '../screens/NewsScreen';
 import AIChatScreen from '../screens/AIChatScreen';
 import MapScreen from '../screens/MapScreen';
 import AnalyticExposureScreen from '../screens/AnalyticExposureScreen';
-import ProfileScreen from '../screens/ProfileScreen';
+import ProfileScreen from '../screens/auth/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 

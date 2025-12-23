@@ -16,7 +16,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { config } from '../../config';
 import { AqiBar } from '../components/ui';
-import { useLocationTracking } from '../hooks/useLocationTracking';
+import { useLocationTracking } from '../hooks/map/useLocationTracking';
 import api, { BASE_URL } from '../services/api';
 import { fetchStationsWithLatestData } from '../services/cemApi';
 import {
