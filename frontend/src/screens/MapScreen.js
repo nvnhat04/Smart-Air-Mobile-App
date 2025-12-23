@@ -19,6 +19,7 @@ import { AqiBar } from '../components/ui';
 import { StationDetailSheet } from '../components/map';
 import { useLocationTracking } from '../hooks/map/useLocationTracking';
 import useMapSearch from '../hooks/map/useMapSearch';
+import useAutoSaveUserLocation from '../hooks/map/useAutoSaveUserLocation';
 import { BASE_URL } from '../services/api';
 import { fetchStationsWithLatestData } from '../services/cemApi';
 import { fetchPM25DataFromBackend, fetchWeatherData, reverseGeocode } from '../services/mapService';
@@ -71,7 +72,6 @@ export default function MapScreen() {
   const webviewRef = React.useRef(null);
   const [locating, setLocating] = useState(false);
   const [selectedStation, setSelectedStation] = useState(null);
-  const savedLocationRef = React.useRef(null); // Track đã save location chưa
   const [loadingPointData, setLoadingPointData] = useState(false);
   
   // Search logic từ hook
@@ -87,6 +87,9 @@ export default function MapScreen() {
   const [cemStations, setCemStations] = useState([]); // Dữ liệu thật từ CEM API
   const [loadingStations, setLoadingStations] = useState(true); // Loading state cho stations
   const [webviewReady, setWebviewReady] = useState(false); // Track WebView ready state
+
+  // Tự động lưu lịch sử vị trí GPS khi user xem chi tiết vị trí của mình
+  const { savedLocationRef } = useAutoSaveUserLocation(selectedStation, saveCurrentLocation);
   const [showHeatmap, setShowHeatmap] = useState(true); // Toggle heatmap
   const [showMarkers, setShowMarkers] = useState(true); // Toggle markers
   const navigation = useNavigation();
@@ -141,43 +144,6 @@ export default function MapScreen() {
     console.log('📞 Calling loadStations()...');
     loadStations();
   }, []); // Chỉ chạy một lần khi mount
-
-  // Lưu vị trí GPS của người dùng khi xem detail vị trí GPS
-  useEffect(() => {
-    // Chỉ lưu nếu là vị trí GPS thực của user (id === 'user-gps-location')
-    if (selectedStation && selectedStation.id === 'user-gps-location' && selectedStation.lat && selectedStation.lng) {
-      // Kiểm tra đã save location này chưa (tránh duplicate khi selectedStation update nhiều lần)
-      const locationKey = `${selectedStation.lat},${selectedStation.lng}`;
-      if (savedLocationRef.current === locationKey) {
-        console.log('[MapScreen] ⏭️ Location already saved, skipping duplicate save');
-        return;
-      }
-
-      const saveUserLocation = async () => {
-        try {
-          console.log('[MapScreen] 📍 Attempting to save user GPS location:', selectedStation.name);
-          const result = await saveCurrentLocation({
-            aqi: selectedStation.aqi || selectedStation.baseAqi,
-            pm25: selectedStation.pm25,
-            address: selectedStation.address || selectedStation.name || 'Vị trí của bạn',
-          });
-          
-          if (result?.skipped) {
-            console.log(`[MapScreen] ⚠️ Location save skipped (${result.reason}): too soon or too close to last saved location`);
-          } else if (result) {
-            console.log('[MapScreen] ✅ User GPS location saved successfully');
-            savedLocationRef.current = locationKey; // Đánh dấu đã save
-          }
-        } catch (error) {
-          console.warn('[MapScreen] ❌ Failed to save user GPS location:', error);
-        }
-      };
-      
-      // Delay một chút để user thực sự xem detail
-      const timer = setTimeout(saveUserLocation, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedStation]);
 
   // API functions đã được tách vào services/mapService.js:
   // - fetchPM25DataFromBackend
