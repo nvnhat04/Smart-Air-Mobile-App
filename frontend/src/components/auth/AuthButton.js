@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 export default function AuthButton({ title, loading, onPress, disabled }) {
   const isDisabled = disabled || loading;
   return (
@@ -43,7 +44,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: scaleFont(18),
   },
 });
 

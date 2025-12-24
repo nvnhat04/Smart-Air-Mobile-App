@@ -1,6 +1,7 @@
 import { StyleSheet, ScrollView, Text, View } from 'react-native';
 import { getAQIColor } from '../../utils/stationUtils';
 
+import { scaleFont } from '../../constants/responsive';
 export default function ForecastCards({ weekly, dateRange }) {
   return (
     <View style={styles.forecastSection}>
@@ -111,21 +112,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   forecastIcon: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     color: '#ffffff',
   },
   forecastTitle: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
     color: '#111827',
   },
   forecastSubtitle: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     marginTop: 2,
   },
   forecastDateRange: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#9ca3af',
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -150,23 +151,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   forecastDay: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '700',
     color: '#111827',
   },
   forecastDate: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#9ca3af',
     marginBottom: 4,
   },
   forecastTemp: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '800',
     color: '#111827',
     marginBottom: 6,
   },
   forecastPrecip: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '600',
     marginBottom: 4,
     opacity: 0.95,
@@ -177,12 +178,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   forecastAqiText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '700',
   },
   forecastHintText: {
     marginTop: 6,
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#9ca3af',
     textAlign: 'center',
   },

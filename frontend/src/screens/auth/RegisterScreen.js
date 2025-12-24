@@ -7,6 +7,7 @@ import AuthButton from '../../components/auth/AuthButton';
 import AuthTextInput from '../../components/auth/AuthTextInput';
 import useRegisterForm from '../../hooks/auth/useRegisterForm';
 
+import { scaleFont } from '../../constants/responsive';
 export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const navigation = useNavigation();
@@ -207,13 +208,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: { 
-    fontSize: 28, 
+    fontSize: scaleFont(28), 
     fontWeight: '800', 
     color: '#0f172a',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     color: '#64748b',
     textAlign: 'center',
   },
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: { 
-    fontSize: 16, 
+    fontSize: scaleFont(16), 
     fontWeight: '700', 
     color: '#3b82f6',
   },
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#dc2626', 
-    fontSize: 15,
+    fontSize: scaleFont(15),
     marginLeft: 8,
     flex: 1,
     fontWeight: 'bold',
@@ -281,12 +282,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     color: '#64748b',
-    fontSize: 15,
+    fontSize: scaleFont(15),
   },
   linkText: { 
     color: '#3b82f6',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: scaleFont(15),
   },
 });
 

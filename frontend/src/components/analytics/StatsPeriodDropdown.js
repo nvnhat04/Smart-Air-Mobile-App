@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 
 export default function StatsPeriodDropdown({
   statsPeriod,
@@ -20,7 +20,7 @@ export default function StatsPeriodDropdown({
         </Text>
         <Feather 
           name={showStatsPeriodMenu ? 'chevron-up' : 'chevron-down'} 
-          size={14} 
+          size={scaleFont(14)} 
           color="#64748b" 
         />
       </TouchableOpacity>
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statsPeriodDropdownText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600',
     color: '#1d4ed8',
   },
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f9ff',
   },
   statsPeriodMenuText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '500',
     color: '#64748b',
   },

@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 import { getAQIColor } from '../../utils';
 
 export default function ExposureChart({
@@ -20,7 +20,7 @@ export default function ExposureChart({
           <Text style={styles.chartTitle}>Diễn biến theo ngày</Text>
         </View>
         <TouchableOpacity onPress={onRefresh} style={{ padding: 6, alignSelf: 'center' }} activeOpacity={0.7}>
-          <Feather name="refresh-cw" size={18} color="#2563eb" />
+          <Feather name="refresh-cw" size={scaleFont(18)} color="#2563eb" />
         </TouchableOpacity>
       </View>
 
@@ -103,7 +103,7 @@ export default function ExposureChart({
                       {
                         height: barHeight,
                         backgroundColor: getAQIColor(adjustedAqi),
-                        opacity: isSelected ? 1 : 0.75,
+                        opacity: isSelected ? 1 : 0.5,
                         transform: [{ scale: isSelected ? 1.15 : 1 }],
                         borderWidth: isToday ? 2 : 0,
                         borderColor: isToday ? '#2563eb' : 'transparent',
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   chartTitle: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   yAxisLabel: {
-    fontSize: 9,
+    fontSize: scaleFont(9),
     color: '#9ca3af',
     fontWeight: '600',
   },
@@ -230,13 +230,13 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     marginTop: 4,
-    fontSize: 7,
+    fontSize: scaleFont(7),
     color: '#9ca3af',
     fontWeight: '700',
   },
   barLabelTodayTag: {
     marginTop: 1,
-    fontSize: 7,
+    fontSize: scaleFont(7),
     color: '#2563eb',
     fontWeight: '700',
     textTransform: 'uppercase',

@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
+import { scaleFont } from '../../constants/responsive';
 /**
  * Dropdown hiển thị kết quả search OSM
  * UI/UX giữ nguyên như MapScreen gốc.
@@ -93,17 +94,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   searchResultName: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#111827',
   },
   searchResultAddress: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     marginTop: 2,
   },
   searchStatusText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#9ca3af',
     paddingHorizontal: 12,
     paddingVertical: 8,

@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 /**
  * StationDetailSheet - Bottom sheet component displaying station/point details
  * @param {Object} station - Station data object
@@ -33,7 +34,7 @@ export default function StationDetailSheet({ station, loading, selectedDay, onCl
 
       {loading ? (
         <View style={[styles.stationContent, { alignItems: 'center', paddingVertical: 24 }]}>
-          <Text style={{ color: '#6b7280', fontSize: 14 }}>Đang tải dữ liệu...</Text>
+          <Text style={{ color: '#6b7280', fontSize: scaleFont(14)}}>Đang tải dữ liệu...</Text>
         </View>
       ) : (
         <View style={styles.stationContent}>
@@ -44,7 +45,7 @@ export default function StationDetailSheet({ station, loading, selectedDay, onCl
               {/* Note for user GPS location */}
               {station.id === 'user-gps-location' && (
                 <View style={{ marginTop: 4, marginBottom: 4 }}>
-                  <Text style={{ fontSize: 12, color: '#2563eb', fontStyle: 'italic' }}>
+                  <Text style={{ fontSize: scaleFont(12), color: '#2563eb', fontStyle: 'italic' }}>
                     📍 Vị trí của bạn
                   </Text>
                 </View>
@@ -83,7 +84,7 @@ export default function StationDetailSheet({ station, loading, selectedDay, onCl
               {/* Show PM2.5 value if available */}
               {station.pm25 !== null && station.pm25 !== undefined && (
                 <View style={{ marginTop: 8 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                  <Text style={{ fontSize: scaleFont(12), color: '#6b7280' }}>
                     PM2.5: <Text style={{ fontWeight: '600', color: '#111827' }}>
                       {station.pm25.toFixed(1)} μg/m³
                     </Text>
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   stationName: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '700',
     color: '#111827',
   },
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   },
   stationAddressText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
   },
   stationChipsRow: {
@@ -223,13 +224,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   stationAqiPillText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '700',
     color: '#ffffff',
   },
   stationStatusText: {
     marginLeft: 6,
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#6b7280',
     fontWeight: '500',
   },
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metricText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#6b7280',
   },
   detailButton: {
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detailButtonText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '700',
     color: '#ffffff',
     marginRight: 6,

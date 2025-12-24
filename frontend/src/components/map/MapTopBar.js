@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 const CONTROL_HEIGHT = 40;
 
 /**
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#111827',
     paddingVertical: 0,
   },
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dayButtonText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#111827',
     fontWeight: '600',
     marginRight: 4,

@@ -11,6 +11,7 @@ import useExposureOverview from '../hooks/analytics/useExposureOverview';
 import useEscapeDestinations from '../hooks/analytics/useEscapeDestinations';
 import { getDateRangeForecast, getDateRangePast } from '../utils/aqiUtils';
 
+import { scaleFont } from '../constants/responsive';
 export default function AnalyticExposureScreen() {
   const [showStatsInfo, setShowStatsInfo] = useState(false);
   const { getLocationHistory } = useLocationTracking(true);
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -330,12 +331,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
     fontWeight: '800',
     color: '#1d4ed8',
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#64748b',
     marginTop: 2,
   },
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
   },
   tabText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#64748b',
   },

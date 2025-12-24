@@ -6,6 +6,7 @@ import AuthButton from '../../components/auth/AuthButton';
 import AuthTextInput from '../../components/auth/AuthTextInput';
 import useLoginForm from '../../hooks/auth/useLoginForm';
 
+import { scaleFont } from '../../constants/responsive';
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const navigation = useNavigation();
@@ -103,13 +104,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: { 
-    fontSize: 32, 
+    fontSize: scaleFont(32), 
     fontWeight: '800', 
     color: '#0f172a',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#64748b',
     textAlign: 'center',
   },
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#dc2626',
-    fontSize: 14,
+    fontSize: scaleFont(14),
     marginLeft: 8,
     flex: 1,
   },
@@ -140,12 +141,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     color: '#64748b',
-    fontSize: 15,
+    fontSize: scaleFont(15),
   },
   linkText: { 
     color: '#3b82f6',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: scaleFont(15),
   }
 });
 

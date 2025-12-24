@@ -1,8 +1,7 @@
-import React from 'react';
-import { ActivityIndicator, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { ActivityIndicator, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 import { getAQIColor } from '../../utils';
-
 const RADIUS_OPTIONS = [20, 50, 70, 100, 120, 150, 200];
 
 export default function EscapeTab({
@@ -43,11 +42,11 @@ export default function EscapeTab({
               onPress={() => setShowRadiusMenu((v) => !v)}
               activeOpacity={0.8}
             >
-              <Feather name="navigation-2" size={12} color="#1d4ed8" />
+              <Feather name="navigation-2" size={scaleFont(12)} color="#1d4ed8" />
               <Text style={styles.weekendRadiusButtonText}>{selectedRadius}km</Text>
               <Feather
-                name={showRadiusMenu ? 'chevron-up' : 'chevron-down'}
-                size={12}
+                  name={showRadiusMenu ? 'chevron-up' : 'chevron-down'}
+                  size={scaleFont(12)}
                 color="#6b7280"
               />
             </TouchableOpacity>
@@ -84,11 +83,11 @@ export default function EscapeTab({
               onPress={() => setShowEscapeDaysMenu((v) => !v)}
               activeOpacity={0.8}
             >
-              <Feather name="clock" size={12} color="#1d4ed8" />
+              <Feather name="clock" size={scaleFont(12)} color="#1d4ed8" />
               <Text style={styles.weekendRadiusButtonText}>{`${escapeForecastDays} ngày`}</Text>
               <Feather
                 name={showEscapeDaysMenu ? 'chevron-up' : 'chevron-down'}
-                size={12}
+                size={scaleFont(12)}
                 color="#6b7280"
               />
             </TouchableOpacity>
@@ -139,9 +138,9 @@ export default function EscapeTab({
         ) : (
           <View style={styles.weekendLocationCard}>
             <View style={{ flex: 1, alignItems: 'center', paddingVertical: 16 }}>
-              <Feather name="map-pin" size={32} color="#cbd5e1" />
-              <Text style={{ fontSize: 14, color: '#64748b', marginTop: 8 }}>Chưa có vị trí</Text>
-              <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, textAlign: 'center' }}>
+              <Feather name="map-pin" size={scaleFont(32)} color="#cbd5e1" />
+              <Text style={{ fontSize: scaleFont(14), color: '#64748b', marginTop: 8 }}>Chưa có vị trí</Text>
+              <Text style={{ fontSize: scaleFont(12), color: '#94a3b8', marginTop: 4, textAlign: 'center' }}>
                 Nhấn nút GPS trên bản đồ để lưu vị trí của bạn
               </Text>
             </View>
@@ -152,7 +151,7 @@ export default function EscapeTab({
 
         {filteredDestinations.length === 0 ? (
           <View style={styles.emptyDestinationsContainer}>
-            <Feather name="map" size={48} color="#cbd5e1" />
+            <Feather name="map" size={scaleFont(48)} color="#cbd5e1" />
             <Text style={styles.emptyDestinationsText}>
               {!userLocation
                 ? 'Vui lòng lưu vị trí để xem gợi ý'
@@ -210,7 +209,7 @@ export default function EscapeTab({
                       </View>
                       <View style={styles.weekendAqiBadge}>
                         <View style={[styles.weekendAqiBadge, { backgroundColor: getAQIColor(dest.aqi) }]}>
-                          <Text style={styles.weekendAqiLabel}>AQI {dest.aqi}</Text>
+                          <Text style={styles.weekendAqiLabel}>AQI VN {dest.aqi}</Text>
                         </View>
                       </View>
                     </View>
@@ -257,7 +256,7 @@ const styles = StyleSheet.create({
   },
   loadingTabText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -283,7 +282,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   weekendTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -307,7 +306,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   weekendRadiusButtonText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '700',
     color: '#1d4ed8',
     marginHorizontal: 4,
@@ -338,7 +337,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
   },
   weekendRadiusMenuText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#4b5563',
   },
   weekendRadiusMenuTextActive: {
@@ -346,7 +345,7 @@ const styles = StyleSheet.create({
     color: '#1d4ed8',
   },
   weekendLocationCard: {
-    marginTop: 4,
+    marginTop: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 16,
@@ -358,11 +357,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   weekendLocationLabel: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
   },
   weekendLocationName: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#0f172a',
     marginTop: 2,
@@ -371,16 +370,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   weekendLocationAqiLabel: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
   },
   weekendLocationAqiValue: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '800',
   },
   weekendSectionHeading: {
     marginTop: 12,
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '700',
     color: '#9ca3af',
     textTransform: 'uppercase',
@@ -389,9 +388,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 18,
     overflow: 'hidden',
+    minHeight: 130,
   },
   weekendCardImage: {
-    height: 130,
+    height: 140,
     width: '100%',
     justifyContent: 'flex-end',
   },
@@ -413,12 +413,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   weekendCardTitle: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '700',
     color: '#ffffff',
   },
   weekendMetaText: {
-    fontSize: 11,
+    fontSize: scaleFont(12),
     color: '#e5e7eb',
     marginTop: 2,
   },
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   weekendAqiLabel: {
-    fontSize: 10,
+    fontSize: scaleFont(12),
     color: 'rgba(255, 255, 255, 0.72)',
     fontWeight: '600',
   },
@@ -445,17 +445,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   weekendStatLabel: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#e5e7eb',
   },
   weekendStatValue: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.72)',
   },
   weekendRecommendation: {
     marginTop: 6,
-    fontSize: 11,
+    fontSize: scaleFont(10),
     color: '#e5e7eb',
   },
   forecastBadge: {
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(254, 226, 226, 0.9)',
   },
   forecastBadgeText: {
-    fontSize: 9,
+    fontSize: scaleFont(9),
     fontWeight: '700',
   },
   forecastBadgeTextGood: {
@@ -491,14 +491,14 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   emptyDestinationsText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '600',
     color: '#64748b',
     marginTop: 16,
     textAlign: 'center',
   },
   emptyDestinationsSubtext: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#94a3b8',
     marginTop: 4,
     textAlign: 'center',

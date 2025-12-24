@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { UserGroupSelector } from '../ui';
 
+import { scaleFont } from '../../constants/responsive';
 export default function HealthAdviceCard({ advice, userGroup, onUserGroupChange }) {
   return (
     <View style={styles.healthCard}>
@@ -60,11 +61,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   healthIcon: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     color: '#ffffff',
   },
   healthTitle: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
     color: '#14532d',
   },
@@ -79,12 +80,12 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   healthAdviceText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#166534',
     lineHeight: 20,
   },
   healthSource: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
     fontStyle: 'italic',
     textAlign: 'center',

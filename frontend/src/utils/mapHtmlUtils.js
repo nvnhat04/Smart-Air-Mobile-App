@@ -2,7 +2,7 @@
  * Generate Leaflet map HTML template for WebView
  * Contains all Leaflet map initialization, WMS layer, markers, and event handlers
  */
-export const generateLeafletHTML = (baseUrl) => `
+export const generateLeafletHTML = (baseUrl, bottomOffsetPx = 10) => `
 <!DOCTYPE html>
 <html lang="vi">
   <head>
@@ -18,11 +18,18 @@ export const generateLeafletHTML = (baseUrl) => `
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       html,
-      body,
-      #map {
+      body {
         height: 100%;
         margin: 0;
         padding: 0;
+      }
+      /* Reserve space at the bottom so map controls / markers are not hidden
+         by native overlays (AQI bar, bottom tab navigation). */
+      #map {
+        height: calc(100% - ${bottomOffsetPx}px);
+        margin: 0;
+        padding: 0;
+        font-size: 10px;
       }
       body {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',

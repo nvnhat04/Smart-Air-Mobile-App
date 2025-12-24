@@ -13,6 +13,7 @@ import {
   StyleSheet,
 } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 export default function ProfileEditModal({
   visible,
   editForm,
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -260,7 +261,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   formLabel: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#334155',
     marginBottom: 8,
@@ -272,7 +273,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 15,
+    fontSize: scaleFont(15),
     color: '#0f172a',
   },
   genderRow: {
@@ -296,7 +297,7 @@ const styles = StyleSheet.create({
     borderColor: '#2563eb',
   },
   genderButtonText: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '500',
     color: '#64748b',
   },
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCancelButtonText: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: 600,
     color: '#64748b',
   },
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   modalSaveButtonText: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
     color: '#ffffff',
   },

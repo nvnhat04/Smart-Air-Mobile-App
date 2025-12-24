@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 import { getAQIColor } from '../../utils';
 
 export default function HistoryItemCard({ item }) {
@@ -75,7 +75,7 @@ export default function HistoryItemCard({ item }) {
       
       <View style={styles.historyCardBody}>
         <View style={styles.historyCardRow}>
-          <Feather name="map-pin" size={14} color="#64748b" />
+          <Feather name="map-pin" size={scaleFont(14)} color="#64748b" />
           <Text style={styles.historyCardLocation} numberOfLines={2}>
             {item.address || 'Không có địa chỉ'}
           </Text>
@@ -83,7 +83,7 @@ export default function HistoryItemCard({ item }) {
         
         {item.pm25 && (
           <View style={styles.historyCardRow}>
-            <Feather name="wind" size={14} color="#64748b" />
+            <Feather name="wind" size={scaleFont(14)} color="#64748b" />
             <Text style={styles.historyCardMeta}>
               PM2.5: {item.pm25.toFixed(1)} µg/m³
             </Text>
@@ -92,7 +92,7 @@ export default function HistoryItemCard({ item }) {
         
         {item.weather && (
           <View style={styles.historyCardRow}>
-            <Feather name="cloud" size={14} color="#64748b" />
+            <Feather name="cloud" size={scaleFont(14)} color="#64748b" />
             <Text style={styles.historyCardMeta}>
               {item.weather.temp}°C • {item.weather.description}
             </Text>
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   historyCardAqiText: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '800',
     color: '#ffffff',
   },
@@ -134,13 +134,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   historyCardDate: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 2,
   },
   historyCardTime: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -154,13 +154,13 @@ const styles = StyleSheet.create({
   },
   historyCardLocation: {
     flex: 1,
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#334155',
     fontWeight: '500',
-    lineHeight: 18,
+    lineHeight: scaleFont(18),
   },
   historyCardMeta: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#64748b',
   },
 });

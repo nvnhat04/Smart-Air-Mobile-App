@@ -1,5 +1,5 @@
-import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 
 export default function ExposureStatsCards({
   statsPeriod,
@@ -48,7 +48,7 @@ export default function ExposureStatsCards({
           {pastPm25Avg}
           <Text style={styles.exposurePm25Unit}> µg/m³</Text>
         </Text>
-        <Text style={styles.exposureText}>Tổng phơi nhiễm tuần trước</Text>
+        <Text style={styles.exposureText}>Tổng phơi nhiễm tuần</Text>
         <Text style={styles.exposureCig}>
           ≈ hút <Text style={styles.exposureCigValue}>{cigPast}</Text> điếu thuốc
         </Text>
@@ -84,7 +84,7 @@ export default function ExposureStatsCards({
           {futurePm25Avg}
           <Text style={styles.exposurePm25Unit}> µg/m³</Text>
         </Text>
-        <Text style={styles.exposureText}>Tổng phơi nhiễm tuần tới</Text>
+        <Text style={styles.exposureText}>Tổng phơi nhiễm tuần</Text>
         <Text style={styles.exposureCig}>
           ≈ hút <Text style={styles.exposureCigValue}>{cigFuture}</Text> điếu thuốc
         </Text>
@@ -127,25 +127,25 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   exposureTag: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '700',
     color: '#4b5563',
     marginBottom: 4,
   },
   exposureDays: {
-    fontSize: 8,
+    fontSize: scaleFont(8),
     fontWeight: '700',
     color: '#8b8d90ff',
     marginBottom: 4,
   },
   exposureAqi: {
-    fontSize: 26,
+    fontSize: scaleFont(26),
     fontWeight: '900',
     color: '#111827',
     textAlign: 'center',
   },
   exposureAqiLabel: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     marginBottom: 4,
     textAlign: 'center',
@@ -161,19 +161,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   minMaxLabel: {
-    fontSize: 9,
+    fontSize: scaleFont(9),
     color: '#9ca3af',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   minMaxValue: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '700',
     color: '#374151',
     marginTop: 2,
   },
   minMaxSeparator: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#d1d5db',
     marginHorizontal: 12,
   },
@@ -190,30 +190,30 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   exposurePm25: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '800',
     color: '#111827',
     textAlign: 'center',
   },
   exposurePm25Unit: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '400',
     color: '#6b7280',
     textAlign: 'center',
   },
   exposureText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     textAlign: 'center',
   },
   exposureCig: {
     marginTop: 4,
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     textAlign: 'center',
   },
   exposureCigValue: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '900',
     color: '#f22602ff',
   },

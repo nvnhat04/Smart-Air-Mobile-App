@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 import HistoryItemCard from './HistoryItemCard';
 
 export default function HistoryTab({
@@ -26,7 +26,7 @@ export default function HistoryTab({
     <View style={styles.historyContainer}>
       <View style={styles.historyHeader}>
         <View style={styles.historyHeaderIcon}>
-          <Feather name="map-pin" size={18} color="#1d4ed8" />
+          <Feather name="map-pin" size={scaleFont(18)} color="#1d4ed8" />
         </View>
         <View style={styles.historyHeaderText}>
           <Text style={styles.historyTitle}>Lịch sử vị trí đã lưu</Text>
@@ -47,7 +47,7 @@ export default function HistoryTab({
           onPress={onReload}
           activeOpacity={0.7}
         >
-          <Feather name="refresh-cw" size={18} color="#1d4ed8" />
+          <Feather name="refresh-cw" size={scaleFont(18)} color="#1d4ed8" />
         </TouchableOpacity>
       </View>
 
@@ -59,7 +59,7 @@ export default function HistoryTab({
 
       {filteredHistoryData.length === 0 ? (
         <View style={styles.emptyHistory}>
-          <Feather name="map" size={48} color="#cbd5e1" />
+          <Feather name="map" size={scaleFont(48)} color="#cbd5e1" />
           <Text style={styles.emptyHistoryText}>
             {historyData.length === 0 ? 'Chưa có lịch sử vị trí' : 'Không có dữ liệu'}
           </Text>
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   },
   loadingTabText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -117,13 +117,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   historyTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 2,
   },
   historySubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#64748b',
   },
   reloadButton: {
@@ -143,13 +143,13 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   emptyHistoryText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '600',
     color: '#64748b',
     marginTop: 16,
   },
   emptyHistorySubtext: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#94a3b8',
     marginTop: 4,
     textAlign: 'center',
@@ -162,27 +162,27 @@ function DayStatsCard({ dayStats }) {
 
   return (
     <View style={dayStatsCardStyles.dayStatsCard}>
-      <View style={{ flexDirection: 'row', marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', marginTop: scaleFont(8) }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#64748b' }}>AQI VN Trung bình</Text>
-          <Text style={{ fontSize: 18, fontWeight: '700' }}>{dayStats.avg_aqi ?? '--'}</Text>
+          <Text style={{ color: '#64748b', fontSize: scaleFont(12) }}>AQI VN Trung bình</Text>
+          <Text style={{ fontSize: scaleFont(18), fontWeight: '700' }}>{dayStats.avg_aqi ?? '--'}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#64748b' }}>PM2.5 Trung bình</Text>
-          <Text style={{ fontSize: 18, fontWeight: '700' }}>
+          <Text style={{ color: '#64748b', fontSize: scaleFont(12) }}>PM2.5 Trung bình</Text>
+          <Text style={{ fontSize: scaleFont(18), fontWeight: '700' }}>
             {dayStats.avg_pm25 != null ? `${Number(dayStats.avg_pm25).toFixed(1)} µg/m³` : '--'}
           </Text>
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+      <View style={{ flexDirection: 'row', marginTop: scaleFont(10) }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#64748b' }}>AQI VN Max</Text>
-          <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.max_aqi ?? '--'}</Text>
+          <Text style={{ color: '#64748b', fontSize: scaleFont(12) }}>AQI VN Max</Text>
+          <Text style={{ fontSize: scaleFont(14), fontWeight: '600' }}>{dayStats.max_aqi ?? '--'}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#64748b' }}>PM2.5 Max</Text>
-          <Text style={{ fontSize: 14, fontWeight: '600' }}>
+          <Text style={{ color: '#64748b', fontSize: scaleFont(12) }}>PM2.5 Max</Text>
+          <Text style={{ fontSize: scaleFont(14), fontWeight: '600' }}>
             {dayStats?.max_pm25 != null
               ? `${Number(dayStats.max_pm25).toFixed(1)} µg/m³`
               : '--'}
@@ -190,14 +190,14 @@ function DayStatsCard({ dayStats }) {
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', marginTop: scaleFont(8) }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#64748b' }}>AQI VN Min</Text>
-          <Text style={{ fontSize: 14, fontWeight: '600' }}>{dayStats.min_aqi ?? '--'}</Text>
+          <Text style={{ color: '#64748b', fontSize: scaleFont(12) }}>AQI VN Min</Text>
+          <Text style={{ fontSize: scaleFont(14), fontWeight: '600' }}>{dayStats.min_aqi ?? '--'}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#64748b' }}>PM2.5 Min</Text>
-          <Text style={{ fontSize: 14, fontWeight: '600' }}>
+          <Text style={{ color: '#64748b', fontSize: scaleFont(12) }}>PM2.5 Min</Text>
+          <Text style={{ fontSize: scaleFont(14), fontWeight: '600' }}>
             {dayStats?.min_pm25 != null
               ? `${Number(dayStats.min_pm25).toFixed(1)} µg/m³`
               : '--'}
@@ -207,8 +207,8 @@ function DayStatsCard({ dayStats }) {
 
       {/* Most visited locations with counts */}
       {dayStats.most_visited_location && Object.keys(dayStats.most_visited_location).length > 0 && (
-        <View style={{ marginTop: 10 }}>
-          <Text style={{ fontWeight: '700', color: '#0f172a', marginBottom: 6 }}>Địa điểm thường đến</Text>
+        <View style={{ marginTop: scaleFont(10) }}>
+          <Text style={{ fontWeight: '700', color: '#0f172a', marginBottom: scaleFont(6) }}>Địa điểm thường đến</Text>
           {Object.entries(dayStats.most_visited_location).map(([addr, count]) => (
             <View
               key={addr}
@@ -216,17 +216,17 @@ function DayStatsCard({ dayStats }) {
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginVertical: 2,
+                marginVertical: scaleFont(2),
               }}
             >
               <Text
-                style={{ color: '#334155', fontSize: 13, flex: 1, marginRight: 8 }}
+                style={{ color: '#334155', fontSize: scaleFont(13), flex: 1, marginRight: scaleFont(8) }}
                 numberOfLines={2}
                 ellipsizeMode="tail"
               >
                 {addr}
               </Text>
-              <Text style={{ color: '#64748b', fontSize: 13, flexShrink: 0, minWidth: 48, textAlign: 'right' }}>
+              <Text style={{ color: '#64748b', fontSize: scaleFont(13), flexShrink: 0, minWidth: 48, textAlign: 'right' }}>
                 {count} lần
               </Text>
             </View>
@@ -325,7 +325,7 @@ const dateFilterStyles = StyleSheet.create({
     borderColor: '#93c5fd',
   },
   filterButtonText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#64748b',
   },

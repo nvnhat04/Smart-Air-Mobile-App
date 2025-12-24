@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { getAQIColor } from '../../utils/stationUtils';
 
+import { scaleFont } from '../../constants/responsive';
 export default function ForecastChart({ chartData, weekly, chartWidth, onChartWidthChange }) {
   const [selectedPoint, setSelectedPoint] = useState(null);
 
@@ -282,7 +283,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   weeklyTitle: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '700',
     color: '#111827',
   },
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
   },
   yAxisLabel: {
     position: 'absolute',
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
     fontWeight: '600',
     right: 0,
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   weeklyDateLabel: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
   },
   chartPointTouch: {
@@ -353,13 +354,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   tooltipCloseText: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     color: '#6b7280',
     fontWeight: '700',
     lineHeight: 18,
   },
   tooltipDate: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
     marginBottom: 6,
     fontWeight: '600',
@@ -370,17 +371,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tooltipAqiLabel: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#6b7280',
     marginRight: 6,
   },
   tooltipAqiValue: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '800',
     color: '#111827',
   },
   tooltipDetail: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     marginTop: 2,
   },

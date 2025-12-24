@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 /**
  * Dropdown chọn ngày (chips) giống SmartAir-UI
  * UI/UX giữ nguyên như MapScreen gốc.
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb',
   },
   dayChipText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#4b5563',
   },
   dayChipTextActive: {
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   dayChipDate: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
   },
   dayChipDateActive: {

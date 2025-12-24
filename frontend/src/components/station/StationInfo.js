@@ -1,6 +1,7 @@
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { getAQIIcon } from '../../utils/stationUtils';
 
+import { scaleFont } from '../../constants/responsive';
 /**
  * LocationChip - Hiển thị thông tin location và timestamp
  */
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
     width: '50%',
   },
   locationText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: 'rgb(0, 0, 0)',
     fontWeight: '600',
     textAlign: 'center',
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   aqiLabelText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '700',
     color: '#ffffff',
     marginTop: 4,
@@ -190,23 +191,23 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   aqiNumber: {
-    fontSize: 44,
+    fontSize: scaleFont(44),
     fontWeight: '900',
     color: '#ffffff',
   },
   pm25Label: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#ffffff',
     opacity: 0.9,
     fontWeight: '600',
   },
   pm25Value: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '800',
     color: '#ffffff',
   },
   statusIcon: {
-    fontSize: 90,
+    fontSize: scaleFont(90),
   },
   statusPill: {
     paddingHorizontal: 10,
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statusPillText: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
     fontWeight: '700',
     color: '#ffffff',
   },
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   metricIcon: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
   },
   metricInfoBox: {
     flexDirection: 'column',
@@ -262,12 +263,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metricLabel: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#6b7280',
     fontWeight: '500',
   },
   metricValue: {
-    fontSize: 18,
+    fontSize: scaleFont(17),
     fontWeight: '700',
     color: '#111827',
     lineHeight: 26,

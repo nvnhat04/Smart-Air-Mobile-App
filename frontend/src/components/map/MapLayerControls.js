@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 
+import { scaleFont, moderateScale } from '../../constants/responsive';
 /**
  * Layer controls: Heatmap / Trạm
  * UI/UX, styles giữ nguyên như trong MapScreen gốc.
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
     width: '50%',
     left: '24.5%',
     right: '33.5%',
-    bottom: 60,
+    bottom: moderateScale(65),
     zIndex: 10,
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   layerButtonText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#2563eb',
     fontWeight: '600',
   },

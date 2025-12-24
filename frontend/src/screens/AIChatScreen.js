@@ -11,6 +11,7 @@ import {
   Keyboard,
 } from 'react-native';
 
+import { scaleFont } from '../constants/responsive';
 export default function AIChatScreen() {
   const [messages, setMessages] = useState([
     {
@@ -276,12 +277,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '700',
     color: '#111827',
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
   },
   statusDot: {
@@ -324,7 +325,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: scaleFont(12),
   },
   messageBubble: {
     maxWidth: '78%',
@@ -341,7 +342,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
   },
   messageTextUser: {
     color: '#f9fafb',
@@ -350,13 +351,13 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   timeText: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
     marginTop: 4,
     alignSelf: 'flex-end',
   },
   typingDots: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     letterSpacing: 2,
     color: '#6b7280',
   },
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   suggestionsTitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#6b7280',
     marginBottom: 4,
     fontWeight: '600',
@@ -382,7 +383,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
   },
   suggestionText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#374151',
   },
   inputWrapper: {
@@ -401,7 +402,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#111827',
     paddingVertical: 4,
     marginRight: 8,
@@ -418,13 +419,13 @@ const styles = StyleSheet.create({
   sendText: {
     color: '#ffffff',
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: scaleFont(13),
   },
   sendTextDisabled: {
     color: '#6b7280',
   },
   disclaimer: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#6b7280',
     marginTop: 4,
     textAlign: 'center',

@@ -37,6 +37,7 @@ import {
 } from '../utils';
 import { generateLeafletHTML } from '../utils/mapHtmlUtils';
 import { getAQICategory } from '../utils/aqiUtils';
+import { scaleFont, moderateScale } from '../constants/responsive';
 const CONTROL_HEIGHT = 40;
 
 export default function MapScreen() {
@@ -410,13 +411,13 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
   },
   loadingSubtext: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#6b7280',
   },
   searchDropdown: {
@@ -446,17 +447,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   searchResultName: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#111827',
   },
   searchResultAddress: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#6b7280',
     marginTop: 2,
   },
   searchStatusText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#9ca3af',
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -501,13 +502,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dayButtonText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#111827',
     fontWeight: '600',
     marginRight: 4,
   },
   dayButtonArrow: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
   },
   dayDropdown: {
@@ -537,7 +538,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb',
   },
   dayChipText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#4b5563',
   },
   dayChipTextActive: {
@@ -545,19 +546,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   dayChipDate: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#9ca3af',
   },
   dayChipDateActive: {
     color: '#e5e7eb',
   },
-  bottomPanel: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 16,
-    zIndex: 10,
-  },
+bottomPanel: {
+  position: 'absolute',
+  left: moderateScale(12),
+  right: moderateScale(12),
+  bottom: moderateScale(32),
+  zIndex: 10,
+},
   aqiWrapper: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
   },
   aqiTitle: {
     color: '#e5e7eb',
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600',
     marginBottom: 6,
   },
@@ -586,11 +587,11 @@ const styles = StyleSheet.create({
   },
   aqiSegmentText: {
     color: '#f9fafb',
-    fontSize: 9,
+    fontSize: scaleFont(9),
     fontWeight: '700',
   },
   aqiNote: {
     color: '#9ca3af',
-    fontSize: 10,
+    fontSize: scaleFont(10),
   },
 });

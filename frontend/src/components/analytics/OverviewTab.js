@@ -1,5 +1,5 @@
-import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 import ChartSelectedInfo from './ChartSelectedInfo';
 import ExposureChart from './ExposureChart';
 import ExposureStatsCards from './ExposureStatsCards';
@@ -148,21 +148,21 @@ const noteCardStyles = StyleSheet.create({
     marginRight: 8,
   },
   exposureNoteIcon: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
   },
   exposureNoteTextBox: {
     flex: 1,
   },
   exposureNoteTitle: {
-    fontSize: 11,
+    fontSize: scaleFont(12),
     fontWeight: '700',
     color: '#854d0e',
     marginBottom: 2,
   },
   exposureNoteText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#92400e',
-    lineHeight: 15,
+    lineHeight: scaleFont(15),
   },
 });
 
@@ -186,16 +186,16 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   exposureIcon: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
   },
   exposureTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 2,
   },
   exposureSubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#64748b',
   },
   loadingTabContainer: {
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   loadingTabText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },

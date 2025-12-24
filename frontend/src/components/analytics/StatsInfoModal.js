@@ -1,5 +1,5 @@
-import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { scaleFont } from '../../constants/responsive';
 
 export default function StatsInfoModal({ visible, onClose }) {
   return (
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
-    fontSize: 17,
+    fontSize: scaleFont(17),
     color: '#2563eb',
     marginBottom: 8,
   },
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     color: '#64748b',
-    fontSize: 13,
+    fontSize: scaleFont(13),
   },
   closeButton: {
     marginTop: 18,
@@ -73,6 +73,7 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+    fontSize: scaleFont(14),
   },
 });
 

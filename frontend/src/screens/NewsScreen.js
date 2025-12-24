@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+import { scaleFont } from '../constants/responsive';
 export default function NewsScreen() {
   // Fallback articles about weather and air pollution in Vietnamese
   const fallbackArticles = [
@@ -639,13 +640,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   title: {
-    fontSize: 28,
+    fontSize: scaleFont(28),
     fontWeight: '700',
     color: '#0f172a',
   },
   subtitle: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#64748b',
   },
   scrollContent: {
@@ -668,7 +669,7 @@ const styles = StyleSheet.create({
     borderColor: '#2563eb',
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600',
     color: '#475569',
   },
@@ -683,7 +684,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   newsCountText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#475569',
     fontWeight: '600',
   },
@@ -715,7 +716,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   emoji: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
   },
   newsImage: {
     width: 50,
@@ -730,7 +731,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -743,14 +744,14 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     marginTop: 16,
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '700',
     color: '#0f172a',
     textAlign: 'center',
   },
   errorText: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
@@ -766,7 +767,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   retryButtonText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#ffffff',
   },
@@ -778,7 +779,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#94a3b8',
   },
   cardHeaderContent: {
@@ -790,7 +791,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   categoryBadge: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     fontWeight: '700',
     color: '#1d4ed8',
     backgroundColor: '#dbeafe',
@@ -800,16 +801,16 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   dateText: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#94a3b8',
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
     color: '#0f172a',
   },
   summary: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#4b5563',
     marginBottom: 8,
   },
@@ -827,12 +828,12 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   sourceText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600',
     color: '#2563eb',
   },
   metaText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#94a3b8',
   },
   footerRight: {
@@ -841,7 +842,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dotDivider: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#cbd5e1',
     marginHorizontal: 4,
   },
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   filterModalTitle: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -901,7 +902,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   filterSectionTitle: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#64748b',
     marginBottom: 8,
@@ -918,7 +919,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   filterOptionText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '600',
     color: '#0f172a',
   },
@@ -955,13 +956,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   webViewTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '600',
     color: '#0f172a',
     marginBottom: 2,
   },
   webViewSource: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#64748b',
   },
   webViewActionButton: {
@@ -986,7 +987,7 @@ const styles = StyleSheet.create({
   },
   webViewLoadingText: {
     marginTop: 12,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },

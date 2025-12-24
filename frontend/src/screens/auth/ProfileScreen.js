@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpa
 import ProfileEditModal from '../../components/auth/ProfileEditModal';
 import useProfile from '../../hooks/auth/useProfile';
 
+import { scaleFont } from '../../constants/responsive';
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const {
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -193,14 +194,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     marginTop: 24,
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '700',
     color: '#0f172a',
     textAlign: 'center',
   },
   emptyText: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '700',
   },
   header: {
@@ -247,14 +248,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   displayName: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
     fontWeight: '700',
     color: '#ffffff',
     marginBottom: 4,
     textAlign: 'center',
   },
   email: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
   },
@@ -270,7 +271,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
     borderColor: '#bfdbfe',
   },
   editButtonText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#2563eb',
     marginLeft: 6,
@@ -316,12 +317,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#64748b',
     fontWeight: '500',
   },
   value: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#0f172a',
     fontWeight: '600',
     maxWidth: '50%',
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
     borderColor: '#fbbf24',
   },
   noticeText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#92400e',
     lineHeight: 18,
     marginTop: 8,
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   noticeButtonText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#ffffff',
   },
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   logoutButtonText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '700',
     color: '#ffffff',
     marginLeft: 8,

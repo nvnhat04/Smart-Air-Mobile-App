@@ -1,6 +1,6 @@
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   ForecastCards,
   ForecastChart,
@@ -9,11 +9,13 @@ import {
   MetricsGrid,
   StationHeader,
 } from '../components/station';
+import { width } from '../constants/deviceDimensions';
 import useChartData from '../hooks/station/useChartData';
-import useStationDetail from '../hooks/station/useStationDetail';
 import useStationData from '../hooks/station/useStationData';
-import { generateWeeklyData, formatTimestamp } from '../utils/stationUtils';
+import useStationDetail from '../hooks/station/useStationDetail';
+import { formatTimestamp, generateWeeklyData } from '../utils/stationUtils';
 
+import { scaleFont } from '../constants/responsive';
 export default function DetailStationScreen() {
   const route = useRoute();
   const navigation = useNavigation();
@@ -31,7 +33,7 @@ export default function DetailStationScreen() {
   });
 
   const [userGroup, setUserGroup] = useState('normal'); // 'normal' or 'sensitive'
-  const [chartWidth, setChartWidth] = useState(Dimensions.get('window').width - 100); // Chart width for responsive
+  const [chartWidth, setChartWidth] = useState(width - 100); // Chart width for responsive
 
   // Hooks
   const { realtimeData, loading } = useStationDetail(station);
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     color: 'rgba(0, 0, 0, 0.62)',
-    fontSize: 40,
+    fontSize: scaleFont(40),
     marginTop: -2,
     fontWeight: '300',
   },
@@ -205,7 +207,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginLeft: 8,
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#2563eb',
     fontWeight: '600',
   },

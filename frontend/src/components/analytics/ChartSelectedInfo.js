@@ -1,5 +1,5 @@
-import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { scale, scaleFont } from '../../constants/responsive';
 import { getAQIColor } from '../../utils';
 
 export default function ChartSelectedInfo({
@@ -52,8 +52,8 @@ export default function ChartSelectedInfo({
 
             if (entries.length > 0) {
               return (
-                <View style={{ marginTop: 10 }}>
-                  <Text style={{ fontWeight: '700', color: '#0f172a', marginBottom: 6 }}>Địa điểm thường đến</Text>
+                <View style={{ marginTop: scale(10) }}>
+                  <Text style={{ fontWeight: '700', color: '#0f172a', marginBottom: scale(6), fontSize : scaleFont(14) }}>Địa điểm thường đến</Text>
                   {entries.map(([addr, count]) => (
                     <View
                       key={addr}
@@ -61,17 +61,18 @@ export default function ChartSelectedInfo({
                         flexDirection: 'row',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        marginVertical: 2,
+                        marginVertical: scale(2),
+                        
                       }}
                     >
                       <Text
-                        style={{ color: '#334155', fontSize: 13, flex: 1, marginRight: 8 }}
+                        style={{ color: '#334155', fontSize: scaleFont(13), flex: 1, marginRight: scale(8) }}
                         numberOfLines={2}
                         ellipsizeMode="tail"
                       >
                         {addr}
                       </Text>
-                      <Text style={{ color: '#64748b', fontSize: 13, flexShrink: 0, textAlign: 'right' }}>
+                      <Text style={{ color: '#64748b', fontSize: scaleFont(13), flexShrink: 0, textAlign: 'right' }}>
                         {count} lần
                       </Text>
                     </View>
@@ -119,15 +120,15 @@ export default function ChartSelectedInfo({
               setActiveTab('history');
             }}
             style={{
-              marginTop: 10,
+              marginTop: scale(10),
               backgroundColor: '#eef2ff',
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 8,
+              paddingVertical: scale(8),
+              paddingHorizontal: scale(12),
+              borderRadius: scale(8),
               alignSelf: 'flex-start',
             }}
           >
-            <Text style={{ color: '#2563eb', fontWeight: '700' }}>Xem chi tiết</Text>
+            <Text style={{ color: '#2563eb', fontWeight: '700' , fontSize: scaleFont(14)}}>Xem chi tiết</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -142,7 +143,7 @@ export default function ChartSelectedInfo({
             return (
               <>
                 <Text style={styles.selectedAqiValue}>--</Text>
-                <Text style={styles.selectedAqiLabel}>AQI VN TB</Text>
+                <Text style={[styles.selectedAqiLabel, { fontSize: scaleFont(14) }]}>AQI TB</Text>
               </>
             );
           }
@@ -151,7 +152,7 @@ export default function ChartSelectedInfo({
           return (
             <>
               <Text style={[styles.selectedAqiValue, { color: getAQIColor(avgAqi) }]}>{avgAqi}</Text>
-              <Text style={styles.selectedAqiLabel}>AQI VN TB</Text>
+              <Text style={[styles.selectedAqiLabel, { fontSize: scaleFont(14) }]}>AQI TB</Text>
             </>
           );
         })() : (
@@ -174,11 +175,11 @@ export default function ChartSelectedInfo({
 
 const styles = StyleSheet.create({
   selectedInfoCard: {
-    marginTop: 12,
-    borderRadius: 20,
+    marginTop: scale(12),
+    borderRadius: scale(20),
     backgroundColor: '#eff6ff',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(14),
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -192,45 +193,45 @@ const styles = StyleSheet.create({
   selectedTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: scale(4),
   },
   selectedTag: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: scale(6),
+    paddingVertical: scale(3),
     borderRadius: 999,
     backgroundColor: '#ffffff',
   },
   selectedTagText: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     fontWeight: '700',
     color: '#2563eb',
   },
   selectedDate: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#6b7280',
-    marginLeft: 6,
+    marginLeft: scale(6),
   },
   selectedLocation: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     color: '#0f172a',
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: scale(2),
   },
   selectedNote: {
-    marginTop: 4,
-    fontSize: 10,
+    marginTop: scale(4),
+    fontSize: scaleFont(10),
     color: '#1d4ed8',
   },
   selectedAqiBox: {
-    marginLeft: 10,
+    marginLeft: scale(10),
     alignItems: 'flex-end',
   },
   selectedAqiValue: {
-    fontSize: 28,
+    fontSize: scaleFont(28),
     fontWeight: '900',
   },
   selectedAqiLabel: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     color: '#6b7280',
     fontWeight: '600',
   },

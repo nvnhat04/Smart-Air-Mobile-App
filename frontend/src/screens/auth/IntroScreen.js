@@ -1,12 +1,13 @@
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useRef, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import IntroPagination from '../../components/auth/IntroPagination';
 import IntroSlide from '../../components/auth/IntroSlide';
-import { Feather } from '@expo/vector-icons';
+import { width } from '../../constants/deviceDimensions';
 
-const { width } = Dimensions.get('window');
 
+import { scaleFont } from '../../constants/responsive';
 const slides = [
   {
     id: 1,
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   skipText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#64748b',
     fontWeight: '600',
   },
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '700',
   },
   branding: {
@@ -144,13 +145,13 @@ const styles = StyleSheet.create({
     paddingVertical: 30,
   },
   brandText: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '800',
     color: '#1e293b',
     marginBottom: 4,
   },
   brandSubtext: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#94a3b8',
   },
 });
