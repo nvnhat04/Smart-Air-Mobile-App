@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 export default function AqiBar() {
   const segments = [
     { color: '#00ab78', label: '0–50' },
@@ -31,8 +32,8 @@ const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: '#DDDDDD',
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
@@ -49,7 +50,7 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     color: '#d1d2d4ff',
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '450',
   },
 });

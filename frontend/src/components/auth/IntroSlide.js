@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
-import { StyleSheet, Text, View, Dimensions } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { width } from '../../constants/deviceDimensions';
 
-const { width } = Dimensions.get('window');
-
+import { scaleFont } from '../../constants/responsive';
 export default function IntroSlide({ title, description, icon, color }) {
   return (
     <View style={styles.slide}>
@@ -31,14 +31,14 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    fontSize: 28,
+    fontSize: scaleFont(28),
     fontWeight: '800',
     color: '#0f172a',
     textAlign: 'center',
     marginBottom: 16,
   },
   description: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 24,

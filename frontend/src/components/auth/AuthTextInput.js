@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 export default function AuthTextInput({
   icon,
   placeholder,
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     padding: 16,
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#0f172a',
   },
   eyeIcon: {
