@@ -160,6 +160,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   aqiColumn: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
@@ -170,6 +171,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   aqiLabelText: {
+    flex: 1,
     fontSize: scaleFont(13),
     fontWeight: '700',
     color: '#ffffff',
