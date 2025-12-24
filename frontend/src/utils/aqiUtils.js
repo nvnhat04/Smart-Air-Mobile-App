@@ -95,3 +95,40 @@ export const formatDateSlash = (date) => {
 export const getDateKey = (date) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
+
+/**
+ * Format date to DD/MM format (for display)
+ * @param {Date} date - Date object
+ * @returns {string} Formatted date string (DD/MM)
+ */
+export const formatDateDisplay = (date) => {
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}`;
+};
+
+/**
+ * Get date range string for forecast period
+ * @param {number} period - Number of days
+ * @returns {string} Date range string (DD/MM - DD/MM)
+ */
+export const getDateRangeForecast = (period) => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  end.setDate(start.getDate() + (Number(period) - 1));
+  return `${formatDateDisplay(start)} - ${formatDateDisplay(end)}`;
+};
+
+/**
+ * Get date range string for past period
+ * @param {number} period - Number of days
+ * @returns {string} Date range string (DD/MM - DD/MM)
+ */
+export const getDateRangePast = (period) => {
+  const end = new Date();
+  const start = new Date();
+  end.setDate(end.getDate() - 1);
+  start.setDate(end.getDate() - (Number(period) - 1));
+  return `${formatDateDisplay(start)} - ${formatDateDisplay(end)}`;
+};

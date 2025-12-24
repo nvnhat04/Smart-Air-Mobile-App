@@ -259,20 +259,20 @@ export default function MapScreen() {
                 const lon = fullStation.lon || fullStation.lng;
                 fetchWeatherData(fullStation.lat, lon, selectedDay?.isoDate)
                   .then((weatherData) => {
-                    setSelectedStation({
-                      ...fullStation,
-                      temp: weatherData.temp,
-                      humidity: weatherData.humidity,
-                      windSpeed: weatherData.windSpeed,
-                      precipitation: weatherData.precipitation,
-                      weatherCode: weatherData.weatherCode,
-                    });
+                  setSelectedStation({
+                    ...fullStation,
+                    temp: weatherData.temp,
+                    humidity: weatherData.humidity,
+                    windSpeed: weatherData.windSpeed,
+                    precipitation: weatherData.precipitation,
+                    weatherCode: weatherData.weatherCode,
+                  });
                   })
                   .catch((err) => {
-                    console.error('Error fetching weather for station:', err);
-                    // Still show station without weather data
-                    setSelectedStation(fullStation);
-                  });
+                  console.error('Error fetching weather for station:', err);
+                  // Still show station without weather data
+                  setSelectedStation(fullStation);
+                });
               } else {
                 // Fallback to basic data from WebView
                 setSelectedStation(data.payload);
@@ -310,7 +310,7 @@ export default function MapScreen() {
         showMarkers={showMarkers}
         onToggleMarkers={() => setShowMarkers(!showMarkers)}
         selectedDayIndex={selectedDayIndex}
-      />
+          />
 
       {/* Zoom controls */}
       {/* <View style={styles.zoomControls}>
@@ -366,9 +366,9 @@ export default function MapScreen() {
         loading={loadingPointData}
         selectedDay={selectedDay}
         onClose={() => {
-          setSelectedStation(null);
-          savedLocationRef.current = null; // Reset để có thể save lại location nếu quay lại
-        }}
+                setSelectedStation(null);
+                savedLocationRef.current = null; // Reset để có thể save lại location nếu quay lại
+              }}
       />
 
       {/* AQI bar dưới cùng – mô phỏng giống SmartAir-UI */}
