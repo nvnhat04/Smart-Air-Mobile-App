@@ -58,7 +58,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str  # Must be set in .env file
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30 days
-    
+
+    # MinIO Settings (load from .env)
+    MINIO_ENDPOINT: str = "112.137.129.244:9001"
+    MINIO_ACCESS_KEY: str = ""  # Must be set in .env file
+    MINIO_SECRET_KEY: str = ""  # Must be set in .env file
+    MINIO_BUCKET: str = "nrt-sci-pm25-map-daily-1km"
+    MINIO_SECURE: bool = False
+
     class Config:
         case_sensitive = True
         env_file = ".env"
