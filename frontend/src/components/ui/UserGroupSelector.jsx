@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 /**
  * UserGroupSelector Component - Tối giản
  * Cho phép người dùng chọn nhóm: Bình thường hoặc Nhạy cảm
@@ -54,7 +55,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   label: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '600',
     color: '#374151',
   },
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb',
   },
   toggleText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600',
     color: '#6b7280',
   },

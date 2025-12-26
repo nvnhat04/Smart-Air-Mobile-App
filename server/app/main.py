@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.db.mongodb import close_mongo_connection, connect_to_mongo
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 # Setup logging
 logging.basicConfig(
@@ -106,3 +107,41 @@ async def startup_event():
 async def shutdown_event():
     """Application shutdown event"""
     logger.info("Shutting down application")
+
+
+
+@app.get('/swagger', response_class=HTMLResponse)
+async def swagger_ui():
+        """Serve a standalone Swagger UI page pointing to the OpenAPI spec."""
+        html = """
+        <!doctype html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <title>SmartAir API — Swagger UI</title>
+                <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+                <style>body { margin:0; padding:0; }</style>
+            </head>
+            <body>
+                <div id="swagger-ui"></div>
+                <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+                <script>
+                    window.onload = function() {
+                        const ui = SwaggerUIBundle({
+                            url: '/openapi.json',
+                            dom_id: '#swagger-ui',
+                            deepLinking: true,
+                            presets: [
+                                SwaggerUIBundle.presets.apis,
+                                SwaggerUIBundle.SwaggerUIStandalonePreset
+                            ],
+                            layout: 'BaseLayout'
+                        });
+                        window.ui = ui;
+                    };
+                </script>
+            </body>
+        </html>
+        """
+        return HTMLResponse(content=html, status_code=200)

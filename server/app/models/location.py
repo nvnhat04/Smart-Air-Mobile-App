@@ -79,8 +79,11 @@ class LocationHistoryStats(BaseModel):
     avg_pm25: Optional[float] = None
     max_pm25: Optional[float] = None
     min_pm25: Optional[float] = None
+
     most_visited_location: Optional[str] = None
     unique_locations: int
+    daily_avg_aqi: list = []
+    length: int = 0
 
     class Config:
         json_schema_extra = {
@@ -97,6 +100,12 @@ class LocationHistoryStats(BaseModel):
                 "max_pm25": 108.0,
                 "min_pm25": 27.0,
                 "most_visited_location": "Phường Dịch Vọng, Quận Cầu Giấy",
-                "unique_locations": 12
+                "unique_locations": 12,
+                "daily_avg_aqi": [
+                    {"date": "2024-12-01", "avg_aqi": 90.2},
+                    {"date": "2024-12-02", "avg_aqi": 100.5},
+                    {"date": "2024-12-03", "avg_aqi": 95.0}
+                ],
+                "length": 3
             }
         }

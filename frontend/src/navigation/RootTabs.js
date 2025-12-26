@@ -6,8 +6,8 @@ import NewsScreen from '../screens/NewsScreen';
 import AIChatScreen from '../screens/AIChatScreen';
 import MapScreen from '../screens/MapScreen';
 import AnalyticExposureScreen from '../screens/AnalyticExposureScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-
+import ProfileScreen from '../screens/auth/ProfileScreen';
+import { scale } from '../constants/responsive';
 const Tab = createBottomTabNavigator();
 
 function SimpleTabLabel({ label, focused }) {
@@ -15,7 +15,7 @@ function SimpleTabLabel({ label, focused }) {
     <View>
       <Text
         style={{
-          fontSize: 12,
+          fontSize: scale(11),
           fontWeight: focused ? '700' : '500',
           color: focused ? '#2563eb' : '#6b7280',
         }}
@@ -36,6 +36,7 @@ export default function RootTabs() {
           height: 65,
           paddingBottom: 14,
           paddingTop: 8,
+          bottom: 10,
         },
       }}
       initialRouteName="Map"
@@ -91,7 +92,7 @@ export default function RootTabs() {
           ),
         }}
       />
-      <Tab.Screen
+      {/* <Tab.Screen
         name="AIChat"
         component={AIChatScreen}
         options={{
@@ -107,7 +108,7 @@ export default function RootTabs() {
             <SimpleTabLabel label="AI Chat" focused={focused} />
           ),
         }}
-      />
+      /> */}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}

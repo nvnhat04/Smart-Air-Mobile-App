@@ -2,6 +2,7 @@
 User model and schemas
 """
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from bson import ObjectId
@@ -32,6 +33,12 @@ class UserProfile(BaseModel):
     location: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    class GroupEnum(str, Enum):
+        normal = "normal"
+        sensitive = "sensitive"
+
+    # group indicates user vulnerability group: 'normal' or 'sensitive'
+    group: Optional[GroupEnum] = GroupEnum.normal
     photoURL: Optional[str] = None
     additionalInfo: Optional[dict] = None
 

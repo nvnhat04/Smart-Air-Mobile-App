@@ -17,7 +17,7 @@ mongodb = MongoDB()
 
 async def connect_to_mongo():
     """Connect to MongoDB"""
-    print(f"🔄 Connecting to MongoDB at {settings.MONGODB_URL}")
+    # print(f"🔄 Connecting to MongoDB at {settings.MONGODB_URL}")
     mongodb.client = AsyncIOMotorClient(settings.MONGODB_URL)
     mongodb.db = mongodb.client[settings.MONGODB_DB_NAME]
     

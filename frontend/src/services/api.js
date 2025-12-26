@@ -45,9 +45,12 @@ try {
 
 // Single BASE_URL for all endpoints (port 8000)
 const DEFAULT_FALLBACK = 'http://10.0.2.2:8000';
-const DEPLOY_URL = ''; // Tắt ngrok để test local: 'https://78fe9b102ec3.ngrok-free.app'
-const LOCAL_NETWORK_URL = process.env.LOCAL_NETWORK_URL; // IP máy tính trên WiFi
+const DEPLOY_URL = 'https://smart-air-mobile-app.onrender.com'; // Thay bằng Vercel URL sau khi deploy
+// Thay YOUR_WIFI_IP bằng IP máy tính của bạn (xem bằng lệnh ipconfig)
+const LOCAL_NETWORK_URL = 'http://192.168.1.8:8000'; // VD: http://192.168.1.10:8000, http://10.0.0.5:8000, etc.
+// const LOCAL_NETWORK_URL = 'http://118.70.181.146:58888'; // VD:
 const BASE_URL = LOCAL_NETWORK_URL || DEPLOY_URL || ENV_BASE || detectedBackendUrl || CONFIG_BASE || DEFAULT_FALLBACK;
+
 
 // console.warn(`[api.js] BASE_URL: ${BASE_URL}`);
 // console.warn(`  priority: deploy=${DEPLOY_URL || 'none'} > env=${ENV_BASE || 'none'} > detected=${detectedBackendUrl || 'none'} > config=${CONFIG_BASE || 'none'} > fallback=${DEFAULT_FALLBACK}`);
@@ -60,7 +63,6 @@ const api = {
   get AUTH_BASE() {
     return `${BASE_URL}/auth`;
   },
-
   // POST /location/save
   saveLocation: async (userId, lat, lng, aqi, address, pm25 = null) => {
     const url = `${BASE_URL}/location/save`;
@@ -80,6 +82,7 @@ const api = {
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
+   
         },
         body: JSON.stringify({ user_id: userId, lat, lng, aqi, pm25, address })
       });
@@ -112,7 +115,10 @@ const api = {
       if (!token) throw new Error('No JWT token found in auth data.');
 
       const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`
+    
+        }
       });
       
       if (!res.ok) {
@@ -131,7 +137,7 @@ const api = {
   // GET /location/stats?days=15
   getLocationStats: async (days = 15) => {
     const url = `${BASE_URL}/location/stats?days=${days}`;
-    console.warn(`[api.js] getLocationStats: GET from ${url}`);
+    // console.warn(`[api.js] getLocationStats: GET from ${url}`);
     try {
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       const authStr = await AsyncStorage.getItem('auth');
@@ -142,7 +148,9 @@ const api = {
       if (!token) throw new Error('No JWT token found in auth data.');
 
       const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!res.ok) {
@@ -150,7 +158,7 @@ const api = {
         throw new Error(`HTTP ${res.status}: ${text}`);
       }
       const data = await res.json();
-      console.warn(`[api.js] getLocationStats: Success`, data);
+      // console.warn(`[api.js] getLocationStats: Success`, data);
       return data;
     } catch (err) {
       console.error(`[api.js] getLocationStats: Error: ${err.message}`);
@@ -158,12 +166,59 @@ const api = {
     }
   },
 
+  // GET /location/stats/day?date=YYYY-MM-DD
+  getLocationStatsForDay: async (date) => {
+    const url = `${BASE_URL}/location/stats/day?date=${encodeURIComponent(date)}`;
+    console.log(`[api.js] getLocationStatsForDay -> GET ${url}`);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const authStr = await AsyncStorage.getItem('auth');
+      if (!authStr) throw new Error('No auth token found. Please login first.');
+      const auth = JSON.parse(authStr);
+      const token = auth.token || auth.access_token;
+      if (!token) throw new Error('No JWT token found in auth data.');
+
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timeout - server took too long to respond');
+      }
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network request failed')) {
+        throw new Error(`Cannot reach server at ${url}. Make sure the FastAPI server is running on port 8000.`);
+      }
+      throw err;
+    }
+  },
+
   // GET /pm25/forecast?lat=21.0285&lon=105.8542&days=7
-  getPM25Forecast: async (lat, lon, days = 8) => {
+  getPM25Forecast: async (lat, lon, days = 7) => {
     const url = `${BASE_URL}/pm25/forecast?lat=${lat}&lon=${lon}&days=${days}`;
     console.warn(`[api.js] getPM25Forecast: GET from ${url}`);
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`HTTP ${res.status}: ${text}`);
@@ -179,7 +234,21 @@ const api = {
 
   // GET /pm25/point?lon=105.8542&lat=21.0285&date=20241206
   getPM25Point: async (lat, lon, date = null) => {
-    const dateParam = date ? `&date=${date.replace(/-/g, '')}` : '';
+    let dateParam = '';
+    if (date) {
+      let dateStr = date;
+      if (date instanceof Date) {
+        // Format to yyyyMMdd
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        dateStr = `${y}${m}${d}`;
+      } else {
+        // Remove all non-digits, fallback
+        dateStr = String(date).replace(/[^\d]/g, '');
+      }
+      dateParam = `&date=${dateStr}`;
+    }
     const url = `${BASE_URL}/pm25/point?lon=${lon}&lat=${lat}${dateParam}`;
     console.warn(`[api.js] getPM25Point: GET from ${url}`);
     
@@ -191,7 +260,7 @@ const api = {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         signal: controller.signal,
       });
@@ -247,12 +316,15 @@ api.auth = {
       phone: profile.phone,
       location: profile.location,
       city: profile.city,
-      country: profile.country
+      country: profile.country,
+      group: profile.group
     });
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ email, username, password, profile })
       });
       if (!res.ok) {
@@ -288,6 +360,7 @@ api.auth = {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
         },
         signal: controller.signal,
       });
@@ -326,7 +399,10 @@ api.auth = {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ email_or_username: emailOrUsername, password })
       });
       if (!res.ok) {
