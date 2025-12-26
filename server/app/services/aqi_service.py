@@ -42,11 +42,12 @@ def get_aqi_category(aqi: Optional[int]) -> Optional[dict]:
         return None
     
     categories = {
-        (0, 50): {"level": "Good", "label": "Tốt", "color": "#00e400"},
+        (0, 50): {"level": "Good", "label": "Tốt", "color": "#00ab78"},
         (51, 100): {"level": "Moderate", "label": "Trung bình", "color": "#ffff00"},
         (101, 150): {"level": "Unhealthy for Sensitive Groups", "label": "Nhạy cảm", "color": "#ff7e00"},
-        (151, 200): {"level": "Unhealthy", "label": "Không tốt", "color": "#ff0000"},
+        (151, 200): {"level": "Unhealthy", "label": "Không tốt", "color": "#d52827"},
         (201, 300): {"level": "Very Unhealthy", "label": "Rất xấu", "color": "#8f3f97"},
+        # (301, 500): {"level": "Hazardous", "label": "Nguy hại", "color": "#7e0023"},
     }
     
     for (low, high), info in categories.items():

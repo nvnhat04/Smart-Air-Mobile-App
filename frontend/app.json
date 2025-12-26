@@ -12,9 +12,14 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nvnhat04sorganization.smartair",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./public/logo_smartair.png",
         "backgroundColor": "#ffffff"
@@ -29,9 +34,9 @@
       "backendUrl": "AUTO_DISCOVER",
       "authServerUrl": "AUTO_DISCOVER",
       "eas": {
-        "projectId": "b02aaf8b-bdc0-4f1c-a680-46f7e5da1b81"
+        "projectId": "e4084b65-9a62-4732-91ea-6c8aa8bddbbd"
       }
     },
-    "owner": "nvnhat04s-organization"
+    "owner": "smartairs-organization"
   }
 }

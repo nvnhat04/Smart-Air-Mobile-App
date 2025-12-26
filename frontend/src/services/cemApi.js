@@ -150,30 +150,85 @@ const parseLastFileContent = (content) => {
  */
 export const fetchStations = async () => {
   try {
-    console.log('🔄 Fetching stations from CEM API...');
-    const response = await fetchWithTimeout(
-      `${CEM_API_BASE}/stations/search/findByIsPublicAndStationTypeAndNullableProvinceId?stationType=4&isPublic=true`,
-      {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
+    console.log('🔄 Fetching stations from CEM API (NEW endpoint)...');
+    
+    // Thử API mới trước
+    let response;
+    let data;
+    let useNewApi = true;
+    
+    try {
+      response = await fetchWithTimeout(
+        'https://envisoft.gov.vn/eos/services/call/json/get_stations',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            is_qi: true,
+            is_public: true,
+            qi_type: 'aqi',
+          }),
         },
-      },
-      10000 // 10 second timeout
-    );
+        10000 // 10 second timeout
+      );
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      data = await response.json();
+      console.log('✅ NEW API Response received!');
+      
+    } catch (newApiError) {
+      console.warn('⚠️ NEW API failed:', newApiError.message);
+      console.log('🔄 Trying OLD API endpoint...');
+      useNewApi = false;
+      
+      // Fallback về API cũ
+      response = await fetchWithTimeout(
+        `${CEM_API_BASE}/stations/search/findByIsPublicAndStationTypeAndNullableProvinceId?stationType=4&isPublic=true`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        },
+        10000
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      data = await response.json();
+      console.log('✅ OLD API Response received!');
     }
-
-    const data = await response.json();
-    console.log('✅ CEM Stations received:', data._embedded?.stations?.length || 0);
-
+    
+    // Debug: Log response structure
+    console.log('📦 CEM API Response keys:', Object.keys(data));
+    console.log('📦 Using API:', useNewApi ? 'NEW' : 'OLD');
+    
     // Parse dữ liệu trạm từ API
-    if (data._embedded && data._embedded.stations) {
-      return data._embedded.stations.map(station => {
-        // Tạo tên trạm từ nhiều nguồn
-        let stationName = station.name || station.stationName || '';
+    let stationsArray = null;
+    
+    // Thử parse với format mới (data.stations)
+    if (data.stations && Array.isArray(data.stations)) {
+      console.log('✅ Found stations in data.stations, count:', data.stations.length);
+      stationsArray = data.stations;
+    }
+    // Thử parse với format cũ (data._embedded.stations)
+    else if (data._embedded && data._embedded.stations && Array.isArray(data._embedded.stations)) {
+      console.log('✅ Found stations in data._embedded.stations, count:', data._embedded.stations.length);
+      stationsArray = data._embedded.stations;
+    }
+    
+    if (stationsArray) {
+      const mappedStations = stationsArray.map(station => {
+        // Tạo tên trạm - support cả format mới và cũ
+        let stationName = station.station_name || station.stationName || station.name || '';
         
         // Nếu không có tên, tạo từ địa chỉ hoặc mã trạm
         if (!stationName || stationName.trim() === '') {
@@ -190,48 +245,117 @@ export const fetchStations = async () => {
           }
         }
         
-        // Parse lastFileContent để lấy dữ liệu thời gian thực
+        // Lấy tọa độ - support cả format mới và cũ
+        const lat = station.latitude || station.lat;
+        const lng = station.longitude || station.lon || station.lng;
+        
+        // Lấy AQI/QI - format mới dùng "qi", format cũ dùng AQI tính từ PM2.5
+        let aqi = station.qi || station.aqi || station.AQI;
+        
+        // Parse lastFileContent nếu có (format cũ)
         const parsedData = station.lastFileContent 
           ? parseLastFileContent(station.lastFileContent) 
           : {};
 
-        // Tính AQI từ PM2.5 nếu có
-        const aqi = parsedData.pm25 ? calculateAQIFromPM25(parsedData.pm25) : null;
+        // Nếu không có AQI từ API mới, tính từ PM2.5
+        if (!aqi && parsedData.pm25) {
+          aqi = calculateAQIFromPM25(parsedData.pm25);
+        }
+        
+        // PM2.5 từ lastFileContent hoặc tính ngược từ qi
+        const pm25 = parsedData.pm25 || (aqi ? aqi * 0.6 : null);
 
         return {
           id: station.id,
           name: stationName,
-          lat: station.lat || station.latitude,
-          lng: station.lon || station.lng || station.longitude,
+          lat: lat,
+          lng: lng,
+          lon: lng, // Thêm lon cho consistency
           address: station.address || '',
           district: station.district || '',
           city: station.province || station.city || '',
-          stationCode: station.stationCode || station.code,
-          type: station.stationType?.name || 'Không rõ',
-          status: station.status || 'active',
-          // Thêm dữ liệu thời gian thực từ lastFileContent
-          pm25: parsedData.pm25,
+          stationCode: station.stationCode || station.code || station.station_code,
+          type: station.stationType?.name || 'Trạm quan trắc không khí',
+          status: station.station_status || station.status || 'active',
+          // Dữ liệu thời gian thực
+          pm25: pm25,
           pm10: parsedData.pm10,
-          aqi: aqi,
-          baseAqi: aqi || 0,
-          temp: parsedData.temp,
-          humidity: parsedData.humidity,
-          windSpeed: parsedData.windSpeed,
-          windDirection: parsedData.windDirection,
+          aqi: Math.round(aqi || 0),
+          baseAqi: Math.round(aqi || 0),
+          temp: parsedData.temp || null,
+          humidity: parsedData.humidity || null,
+          windSpeed: parsedData.windSpeed || null,
+          windDirection: parsedData.windDirection || null,
           co: parsedData.co,
           no2: parsedData.no2,
           so2: parsedData.so2,
           o3: parsedData.o3,
-          timestamp: new Date().toISOString(),
+          color: station.color || '#22c55e',
+          timestamp: station.qi_time || new Date().toISOString(),
         };
       });
+      
+      // Log first station
+      if (mappedStations.length > 0) {
+        console.log('📊 First mapped station:', {
+          id: mappedStations[0].id,
+          name: mappedStations[0].name,
+          lat: mappedStations[0].lat,
+          lng: mappedStations[0].lng,
+          aqi: mappedStations[0].aqi,
+          pm25: mappedStations[0].pm25,
+        });
+      }
+      
+      return mappedStations;
     }
 
+    console.log('⚠️ No stations array found in response');
     return [];
   } catch (error) {
     console.error('❌ Error fetching CEM stations:', error);
     console.log('⚠️ Using mock data fallback');
     return MOCK_STATIONS;
+  }
+};
+
+/**
+ * Fetch chi tiết dữ liệu của một trạm cụ thể
+ * @param {string|number} stationId - ID của trạm cần lấy chi tiết
+ * @returns {Promise<Object>} Chi tiết dữ liệu trạm
+ */
+export const fetchStationDetails = async (stationId) => {
+  try {
+    console.log(`🔄 Fetching details for station ${stationId}...`);
+    const response = await fetchWithTimeout(
+      'https://envisoft.gov.vn/eos/services/call/json/qi_detail',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'Origin': 'https://cem.gov.vn',
+          'Referer': 'https://cem.gov.vn/',
+        },
+        body: new URLSearchParams({
+          station_id: stationId,
+        }),
+      },
+      10000 // 10 second timeout
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`✅ Station details received for ${stationId}`);
+
+    // Return dữ liệu từ response.res
+    return data.res || null;
+  } catch (error) {
+    console.error(`❌ Error fetching station details for ${stationId}:`, error);
+    return null;
   }
 };
 
@@ -406,6 +530,75 @@ export const fetchStationDataByDate = async (stationId, date) => {
   } catch (error) {
     console.error('❌ Error fetching station data by date:', error);
     return null;
+  }
+};
+
+/**
+ * Fetch dữ liệu 7 ngày tiếp theo cho một trạm cụ thể
+ * @param {string} stationId - ID của trạm
+ * @returns {Promise<Array>} Mảng dữ liệu 7 ngày
+ */
+export const fetchStation7DayForecast = async (stationId) => {
+  try {
+    console.log(`🔄 Fetching 7-day data for station ${stationId}...`);
+    
+    // Tạo mảng 7 ngày từ hôm nay
+    const today = new Date();
+    const dates = [];
+    const daysShort = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      
+      const dayOfWeek = date.getDay();
+      const dateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      dates.push({
+        date: dateStr,
+        label: daysShort[dayOfWeek],
+        isoDate,
+        dateKey: isoDate.replace(/-/g, ''),
+      });
+    }
+    
+    // Fetch dữ liệu cho từng ngày (parallel)
+    const dataPromises = dates.map(async (dateInfo) => {
+      try {
+        const result = await fetchStationDataByDate(stationId, dateInfo.isoDate);
+        return {
+          ...dateInfo,
+          aqi: result?.aqi || null,
+          pm25: result?.pm25 || null,
+          temp: result?.temp || null,
+          humidity: result?.humidity || null,
+          wind_speed: result?.windSpeed || null,
+          hasData: result !== null,
+        };
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch data for ${dateInfo.isoDate}:`, error);
+        return {
+          ...dateInfo,
+          aqi: null,
+          pm25: null,
+          temp: null,
+          humidity: null,
+          wind_speed: null,
+          hasData: false,
+        };
+      }
+    });
+    
+    const results = await Promise.all(dataPromises);
+    
+    const daysWithData = results.filter(r => r.hasData).length;
+    console.log(`✅ Station ${stationId}: ${daysWithData}/7 days have data`);
+    
+    return results;
+  } catch (error) {
+    console.error('❌ Error fetching station 7-day data:', error);
+    return [];
   }
 };
 

@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # By default, bind to localhost for security. 
     # To expose the server on all interfaces (e.g., for production), set HOST to "0.0.0.0" via environment variable or config file.
     # WARNING: Binding to "0.0.0.0" exposes the server on all network interfaces and may be a security risk in production.
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    HOST: str = "127.0.0.1"
+    PORT: int = 8888
     DEBUG: bool = True
     RELOAD: bool = True
     
@@ -41,13 +41,14 @@ class Settings(BaseSettings):
     
     # AQI Breakpoints (US EPA for PM2.5)
     AQI_BREAKPOINTS: list = [
-        {"pm_min": 0.0,   "pm_max": 25.0,  "aqi_min": 0,   "aqi_max": 50,  "color": (0, 228, 0, 255),     "level": "Good"},
-        {"pm_min": 25.0,  "pm_max": 50.0,  "aqi_min": 51,  "aqi_max": 100, "color": (255, 255, 0, 255),   "level": "Moderate"},
-        {"pm_min": 50.0,  "pm_max": 80.0,  "aqi_min": 101, "aqi_max": 150, "color": (255, 126, 0, 255),   "level": "Unhealthy for Sensitive Groups"},
-        {"pm_min": 80.0,  "pm_max": 150.0, "aqi_min": 151, "aqi_max": 200, "color": (255, 0, 0, 255),     "level": "Unhealthy"},
-        {"pm_min": 150.0, "pm_max": 250.0, "aqi_min": 201, "aqi_max": 300, "color": (143, 63, 151, 255),  "level": "Very Unhealthy"},
-        {"pm_min": 250.0, "pm_max": 500.0, "aqi_min": 301, "aqi_max": 500, "color": (126, 0, 35, 255),    "level": "Hazardous"}
+        {"pm_min": 0.0, "pm_max": 25.0, "aqi_min": 0, "aqi_max": 50, "color": (27, 190, 88, 255), "level": "Good"},
+        {"pm_min": 25.0, "pm_max": 50.0, "aqi_min": 51, "aqi_max": 100, "color": (255, 255, 0, 255), "level": "Moderate"},
+        {"pm_min": 50.0, "pm_max": 80.0, "aqi_min": 101, "aqi_max": 150, "color": (255, 126, 0, 255), "level": "Unhealthy for Sensitive Groups"},
+        {"pm_min": 80.0, "pm_max": 150.0, "aqi_min": 151, "aqi_max": 200, "color": (213, 40, 39, 255), "level": "Unhealthy"},
+        {"pm_min": 150.0, "pm_max": 250.0, "aqi_min": 201, "aqi_max": 300, "color": (143, 63, 151, 255), "level": "Very Unhealthy"},
+        {"pm_min": 250.0, "pm_max": 500.0, "aqi_min": 301, "aqi_max": 500, "color": (126, 0, 35, 255), "level": "Hazardous"},
     ]
+
     
     # MongoDB Settings (load from .env)
     MONGODB_URL: str = "mongodb://localhost:27017"  # Default fallback

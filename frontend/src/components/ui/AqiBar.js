@@ -1,14 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
+import { scaleFont } from '../../constants/responsive';
 export default function AqiBar() {
   const segments = [
-    { color: '#22c55e', label: '0–50' },
-    { color: '#eab308', label: '51–100' },
-    { color: '#f97316', label: '101–150' },
-    { color: '#ef4444', label: '151–200' },
-    { color: '#7c3aed', label: '201–300' },
-    { color: '#7f1d1d', label: '300+' },
+    { color: '#00ab78', label: '0–50' },
+    { color: '#ffff00', label: '51–100' },
+    { color: '#ff7e00', label: '101–150' },
+    { color: '#d52827', label: '151–200' },
+    { color: '#8f3f97', label: '201–300' },
+    { color: '#7e0023', label: '300+' },
   ];
 
   return (
@@ -31,8 +32,8 @@ const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: '#DDDDDD',
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
@@ -48,8 +49,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentText: {
-    color: '#f9fafb',
-    fontSize: 12,
+    color: '#d1d2d4ff',
+    fontSize: scaleFont(12),
     fontWeight: '450',
   },
 });

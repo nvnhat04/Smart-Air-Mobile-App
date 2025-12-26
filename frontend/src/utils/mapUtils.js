@@ -56,8 +56,8 @@ export const getHealthAdvice = (aqi, userGroup = 'normal') => {
   if (aqi <= 100) {
     const result = {
       text: isSensitive
-        ? 'Hạn chế hoạt động ngoài trời lâu. Theo dõi triệu chứng khó thở.'
-        : 'Chất lượng không khí chấp nhận được.',
+        ? 'Hạn chế hoạt động ngoài trời lâu. \nTheo dõi sức khoẻ, nếu xuất hiện các triệu chứng cấp tính như khó thở, ho, sốt cần đến ngay các cơ sở y tế để khám và được tư vấn, điều trị.'
+        : 'Tham gia các hoạt động ngoài trời không hạn chế',
       action: isSensitive ? 'Hạn chế thời gian' : 'Bình thường',
       level: 'moderate',
       color: '#eab308'
@@ -68,10 +68,13 @@ export const getHealthAdvice = (aqi, userGroup = 'normal') => {
   
   // AQI 101-150: Kém (Unhealthy for Sensitive Groups)
   if (aqi <= 150) {
+    const text_normal_150 = "- Giảm thời gian hoạt động ngoài trời, đặc biệt nếu bị đau mắt, ho hoặc đau họng.\n- Tránh khu vực ô nhiễm cao như đường đông xe, công trình, khu công nghiệp.\n- Học sinh có thể hoạt động ngoài trời nhưng nên hạn chế vận động mạnh kéo dài.";
+    const text_sensitive_150 = "- Hạn chế hoạt động ngoài trời và vận động gắng sức; nghỉ ngơi và hoạt động nhẹ.\n- Vệ sinh mũi, súc họng và rửa mắt bằng nước muối sau khi ra ngoài.\n- Theo dõi sức khỏe; nếu khó thở, ho hoặc sốt cần đến cơ sở y tế.";
+
     return {
       text: isSensitive
-        ? 'Tránh ra ngoài. Nếu cần thiết: đeo khẩu trang N95, hạn chế tối đa thời gian.'
-        : 'Đeo khẩu trang khi ra ngoài. Đóng cửa sổ trong nhà.',
+        ? text_sensitive_150
+        : text_normal_150,
       action: 'Đeo khẩu trang',
       level: 'unhealthy_sensitive',
       color: '#f97316'
@@ -80,10 +83,13 @@ export const getHealthAdvice = (aqi, userGroup = 'normal') => {
   
   // AQI 151-200: Xấu (Unhealthy)
   if (aqi <= 200) {
+    const text_normal_200 = "- Hạn chế hoạt động ngoài trời, giảm vận động mạnh. Tránh khu vực ô nhiễm cao.\n- Ưu tiên sử dụng giao thông công cộng, hạn chế xe máy/xe đạp.\n- Hạn chế mở cửa khi không khí ô nhiễm nặng.\n- Vệ sinh mũi, súc họng và rửa mắt bằng nước muối sau khi ra ngoài.";
+    const text_sensitive_200 = "- Tránh các hoạt động ngoài trời; nên tập luyện trong nhà. Hạn chế mở cửa khi ô nhiễm nặng.\n- Vệ sinh mũi, súc họng và rửa mắt bằng nước muối mỗi ngày.\n- Theo dõi sức khỏe; nếu khó thở, ho hoặc sốt cần đến cơ sở y tế ngay.";
+
     return {
       text: isSensitive
-        ? 'KHÔNG ra ngoài. Đóng kín cửa, bật máy lọc không khí. Gọi bác sĩ nếu khó thở.'
-        : 'Ở trong nhà. Ra ngoài bắt buộc: đeo khẩu trang N95, hạn chế thời gian.',
+        ? text_sensitive_200
+        : text_normal_200,
       action: 'Ở trong nhà',
       level: 'unhealthy',
       color: '#ef4444'
@@ -92,21 +98,26 @@ export const getHealthAdvice = (aqi, userGroup = 'normal') => {
   
   // AQI 201-300: Rất xấu (Very Unhealthy)
   if (aqi <= 300) {
+    const text_normal_300 = "- Tránh hoạt động ngoài trời; ưu tiên sinh hoạt trong nhà.\n- Nếu phải ra ngoài, cần đeo khẩu trang chống bụi mịn PM2.5.\n- Tránh khu vực ô nhiễm cao; hạn chế mở cửa.\n- Vệ sinh mũi, họng và mắt bằng nước muối sau khi ra ngoài.";
+    const text_sensitive_300 = "- Tránh hoàn toàn hoạt động ngoài trời; di chuyển sinh hoạt vào trong nhà.\n- Nếu bắt buộc phải ra ngoài, cần rút ngắn thời gian và đeo khẩu trang PM2.5.\n- Theo dõi triệu chứng; đi khám nếu khó thở, ho, sốt.";
+
     return {
       text: isSensitive
-        ? 'TUYỆT ĐỐI không ra ngoài! Bật máy lọc không khí. Gọi cấp cứu nếu có triệu chứng.'
-        : 'Hạn chế tối đa ra ngoài. Bắt buộc: khẩu trang N95, thời gian tối thiểu.',
+        ? text_sensitive_300
+        : text_normal_300,
       action: 'Máy lọc không khí',
       level: 'very_unhealthy',
       color: '#a855f7'
     };
   }
-  
+  const text_normal_500 = "- Tránh mọi hoạt động ngoài trời; chuyển sang sinh hoạt trong nhà.\n- Đóng cửa sổ và cửa ra vào để hạn chế tiếp xúc với không khí ô nhiễm.";
+  const text_sensitive_500 = "- Tuyệt đối không ra ngoài; sinh hoạt hoàn toàn trong nhà và đóng kín cửa.\n- Theo dõi triệu chứng và đến cơ sở y tế nếu có khó thở, ho, sốt.\n- Trẻ em (mẫu giáo/tiểu học) có thể được nghỉ học nếu AQI nguy hại kéo dài 3 ngày.";
+
   // AQI 301+: Nguy hại (Hazardous)
   return {
     text: isSensitive
-      ? '🚨 KHẨN CẤP! Ở trong nhà tuyệt đối. Máy lọc công suất cao. Gọi 115 nếu khó thở.'
-      : '🚨 CẢNH BÁO NGHIÊM TRỌNG! Ở trong nhà, đóng kín cửa, bật máy lọc không khí.',
+      ? text_sensitive_500
+      : text_normal_500,
     action: '⚠️ Khẩn cấp',
     level: 'hazardous',
     color: '#7c2d12'
