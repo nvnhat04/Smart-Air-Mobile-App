@@ -135,9 +135,7 @@ export default function ChartSelectedInfo({
       <View style={styles.selectedAqiBox}>
         {selectedData.type === 'past' ? (() => {
           // Use the day-average AQI if available (from analyticsData or dayStats)
-          const rawAqi = (selectedData && selectedData.aqi != null)
-            ? selectedData.aqi
-            : (dayStats && dayStats.avg_aqi != null ? dayStats.avg_aqi : null);
+          const rawAqi =dayStats && dayStats.avg_aqi != null ? dayStats.avg_aqi : null;
 
           if (rawAqi == null) {
             return (
